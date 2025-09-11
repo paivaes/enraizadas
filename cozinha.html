@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale-1.0">
+    <title>Painel da Cozinha</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #1f2937; }
+        ::-webkit-scrollbar-thumb { background: #4f46e5; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #6366f1; }
+        @media print {
+            body * { visibility: hidden; }
+            #print-area, #print-area * { visibility: visible; }
+            #print-area { position: absolute; left: 0; top: 0; width: 100%; }
+            .no-print { display: none; }
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white">
+
+    <div class="container mx-auto p-4 md:p-8">
+        <header class="flex justify-between items-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-500">Painel da Cozinha</h1>
+            <div class="flex items-center gap-2">
+                <span class="relative flex h-3 w-3">
+                  <span id="connection-ping" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                  <span id="connection-dot" class="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+                </span>
+                <span id="connection-status" class="text-green-400">Conectado</span>
+            </div>
+        </header>
+
+        <div id="orders-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            <!-- Pedidos serão inseridos aqui -->
+        </div>
+        <div id="loading-orders" class="text-center py-10">
+            <p class="text-gray-400 text-lg">Carregando pedidos...</p>
+        </div>
+    </div>
+    
+    <div id="print-area" class="hidden bg-white text-black p-4 text-xs"></div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getFirestore, collection, onSnapshot, query, doc, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+
+        let db;
+        let allOrdersCache = []; // Cache para armazenar os pedidos atuais
+        const ordersContainer = document.getElementById('orders-container');
+        const loadingOrders = document.getElementById('loading-orders');
+        const printArea = document.getElementById('print-area');
+        const connectionStatus = document.getElementById('connection-status');
+        const connectionPing = document.getElementById('connection-ping');
+        const connectionDot = document.getElementById('connection-dot');
+
+        const formatCurrency = (value) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+        const renderOrders = (orders) => {
+            loadingOrders.style.display = 'none';
+            ordersContainer.innerHTML = '';
+
+            if (orders.length === 0) {
+                ordersContainer.innerHTML = `<p class="text-gray-400 col-span-full text-center">Nenhum pedido pendente.</p>`;
+                return;
+            }
+
+            orders.forEach(pedido => {
+                const orderCard = document.createElement('div');
+                const isDone = pedido.status === 'concluido';
+                orderCard.className = `p-5 rounded-xl shadow-lg transition-all duration-300 ${isDone ? 'bg-green-900 border-green-700' : 'bg-gray-800'}`;
+                orderCard.innerHTML = `
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h3 class="text-xl font-bold">${pedido.customerName || 'Cliente não informado'}</h3>
+                            <p class="text-sm text-gray-400">#${pedido.id.substring(0, 5)} - ${pedido.createdAt ? new Date(pedido.createdAt.seconds * 1000).toLocaleTimeString('pt-BR') : ''}</p>
+                        </div>
+                        <div class="text-center bg-indigo-600 p-3 rounded-lg">
+                            <span class="block text-sm font-medium text-indigo-200">Senha</span>
+                            <span class="block text-3xl font-bold">${pedido.password || '-'}</span>
+                        </div>
+                    </div>
+                    <div class="mt-4 border-t border-gray-700 pt-4">
+                        ${pedido.items.map(item => `
+                            <div class="flex justify-between text-sm mb-1">
+                                <span class="text-gray-300">${item.quantity}x ${item.name}</span>
+                                <span class="font-medium">${formatCurrency(item.price * item.quantity)}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <div class="mt-4 pt-4 border-t border-gray-600 flex justify-between items-center">
+                        <span class="text-lg font-bold">Total: ${formatCurrency(pedido.total)}</span>
+                    </div>
+                    <div class="mt-4 flex gap-2 no-print">
+                        <button data-id="${pedido.id}" class="print-btn w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">Imprimir</button>
+                        <button data-id="${pedido.id}" class="status-btn w-full ${isDone ? 'bg-yellow-600 hover:bg-yellow-700' : 'bg-green-600 hover:bg-green-700'} text-white font-bold py-2 px-4 rounded-lg transition-colors">${isDone ? 'Reabrir' : 'Concluir'}</button>
+                    </div>
+                `;
+                ordersContainer.appendChild(orderCard);
+            });
+        };
+
+        const handlePrint = (pedido) => {
+            const time = new Date(pedido.createdAt.seconds * 1000);
+            let printContent = `
+                <div style="font-family: monospace; padding: 10px;">
+                    <h2 style="text-align: center; font-size: 1.2em; margin-bottom: 10px;">${document.title}</h2>
+                    <p>Pedido: #${pedido.id.substring(0, 5)}</p>
+                    <p>Cliente: <strong>${pedido.customerName}</strong></p>
+                    <p>Senha: <strong>${pedido.password}</strong></p>
+                    <p>Data: ${time.toLocaleDateString('pt-BR')} ${time.toLocaleTimeString('pt-BR')}</p>
+                    <hr style="border-top: 1px dashed black; margin: 10px 0;">
+                    ${pedido.items.map(item => `
+                        <div style="display: flex; justify-content: space-between;">
+                            <span>${item.quantity}x ${item.name}</span>
+                            <span>${formatCurrency(item.price * item.quantity)}</span>
+                        </div>
+                    `).join('')}
+                    <hr style="border-top: 1px dashed black; margin: 10px 0;">
+                    <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: 1.1em;">
+                        <span>Total:</span>
+                        <span>${formatCurrency(pedido.total)}</span>
+                    </div>
+                </div>
+            `;
+            printArea.innerHTML = printContent;
+            window.print();
+        };
+
+        const updateStatus = async (pedidoId, currentStatus) => {
+            if (!db) return;
+            const newStatus = currentStatus === 'pendente' ? 'concluido' : 'pendente';
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+            const orderRef = doc(db, `artifacts/${appId}/public/data/pedidos`, pedidoId);
+            try {
+                await updateDoc(orderRef, { status: newStatus });
+            } catch (error) {
+                console.error("Erro ao atualizar status: ", error);
+            }
+        };
+
+        (async () => {
+            try {
+                const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+                const app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                const auth = getAuth(app);
+
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+
+                console.log("Firebase inicializado e autenticado.");
+                const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+                const q = query(collection(db, `artifacts/${appId}/public/data/pedidos`));
+
+                onSnapshot(q, (querySnapshot) => {
+                    connectionStatus.textContent = "Conectado";
+                    connectionStatus.classList.replace('text-yellow-400', 'text-green-400');
+                    connectionDot.classList.replace('bg-yellow-500', 'bg-green-500');
+                    connectionPing.classList.remove('hidden');
+
+                    let allOrders = [];
+                    querySnapshot.forEach((doc) => {
+                        allOrders.push({ id: doc.id, ...doc.data() });
+                    });
+                    
+                    allOrders.sort((a, b) => {
+                        const statusA = a.status === 'pendente' ? 0 : 1;
+                        const statusB = b.status === 'pendente' ? 0 : 1;
+                        if (statusA !== statusB) return statusA - statusB;
+                        return (b.createdAt?.seconds ?? 0) - (a.createdAt?.seconds ?? 0);
+                    });
+                    
+                    allOrdersCache = allOrders; // CORREÇÃO: Atualiza o cache com os pedidos mais recentes
+                    renderOrders(allOrders);
+
+                }, (error) => {
+                    console.error("Erro ao buscar pedidos: ", error);
+                    connectionStatus.textContent = "Reconectando...";
+                    connectionStatus.classList.replace('text-green-400', 'text-yellow-400');
+                    connectionDot.classList.replace('bg-green-500', 'bg-yellow-500');
+                    connectionPing.classList.add('hidden');
+                });
+            } catch (error) {
+                console.error("Erro na inicialização: ", error);
+                loadingOrders.innerHTML = `<p class="text-red-400">Falha ao conectar com o banco de dados.</p>`;
+            }
+        })();
+
+        document.body.addEventListener('click', (event) => {
+            const target = event.target.closest('button');
+            if (!target) return;
+            const orderId = target.dataset.id;
+            const pedido = allOrdersCache.find(p => p.id === orderId); // Agora encontra o pedido correto
+            if (!pedido) return;
+
+            if (target.classList.contains('print-btn')) handlePrint(pedido);
+            if (target.classList.contains('status-btn')) updateStatus(orderId, pedido.status);
+        });
+
+    </script>
+</body>
+</html>
+
