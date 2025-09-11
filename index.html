@@ -151,6 +151,25 @@
         </div>
     </div>
 
+    <!-- Modal de Senha do Admin -->
+    <div id="password-modal" class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center hidden z-50">
+        <div class="bg-gray-800 rounded-2xl p-8 max-w-sm w-11/12 text-center shadow-2xl modal-enter">
+            <h3 class="text-2xl font-bold mb-4">Acesso Restrito</h3>
+            <p class="text-gray-400 mb-6">Por favor, insira a senha de administrador para continuar.</p>
+            <form id="password-form">
+                <div>
+                    <label for="admin-password" class="block text-sm font-medium text-gray-300 text-left mb-1">Senha</label>
+                    <input type="password" id="admin-password" required class="block w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+                <p id="password-error-message" class="text-red-400 text-sm mt-2 h-4"></p>
+                <div class="mt-4 flex gap-2">
+                    <button type="button" id="cancel-password-modal-button" class="w-full bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg transition-colors">Cancelar</button>
+                    <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">Entrar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- Modal de Administração -->
     <div id="admin-modal" class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center hidden z-50">
         <div class="bg-gray-800 rounded-2xl p-6 md:p-8 w-11/12 max-w-4xl shadow-2xl modal-enter max-h-[90vh] flex flex-col">
@@ -208,235 +227,220 @@
         import { getFirestore, collection, addDoc, serverTimestamp, runTransaction, doc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 
-        // --- ESTADO GLOBAL E VARIÁVEIS ---
-        let db;
-        let menuItems = [];
-        let cart = [];
-        let editingItemId = null;
-        let lanchoneteConfig = { name: "Lanchonete Sabor Digital" };
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- ESTADO GLOBAL E VARIÁVEIS ---
+            let db;
+            let menuItems = [];
+            let cart = [];
+            let editingItemId = null;
+            let lanchoneteConfig = { name: "Lanchonete Sabor Digital" };
 
-        // --- INICIALIZAÇÃO FIREBASE ---
-        // Import the functions you need from the SDKs you need
-		import { initializeApp } from "firebase/app";
-		// TODO: Add SDKs for Firebase products that you want to use
-		// https://firebase.google.com/docs/web/setup#available-libraries
+            // --- SELEÇÃO DE ELEMENTOS DO DOM ---
+            const lanchoneteNameElement = document.getElementById('lanchonete-name');
+            const menuContainer = document.getElementById('menu-container');
+            const cartItemsContainer = document.getElementById('cart-items');
+            const emptyCartMessage = document.getElementById('empty-cart-message');
+            const cartFooter = document.getElementById('cart-footer');
+            const totalPriceElement = document.getElementById('total-price');
+            const checkoutButton = document.getElementById('checkout-button');
+            const orderModal = document.getElementById('order-modal');
+            const closeModalButton = document.getElementById('close-modal-button');
+            const customerNameModal = document.getElementById('customer-name-modal');
+            const customerNameForm = document.getElementById('customer-name-form');
+            const cancelNameModalButton = document.getElementById('cancel-name-modal-button');
+            const adminButton = document.getElementById('admin-button');
+            const adminModal = document.getElementById('admin-modal');
+            const closeAdminModalButton = document.getElementById('close-admin-modal-button');
+            const passwordModal = document.getElementById('password-modal');
+            const passwordForm = document.getElementById('password-form');
+            const cancelPasswordModalButton = document.getElementById('cancel-password-modal-button');
+            const passwordErrorMessage = document.getElementById('password-error-message');
+            const configForm = document.getElementById('config-form');
+            const configNameInput = document.getElementById('config-name');
+            const adminMenuList = document.getElementById('admin-menu-list');
+            const menuItemForm = document.getElementById('menu-item-form');
+            const formTitle = document.getElementById('form-title');
+            const cancelEditBtn = document.getElementById('cancel-edit-btn');
+            const orderPasswordElement = document.getElementById('order-password');
+            const orderErrorMessage = document.getElementById('order-error-message');
 
-		// Your web app's Firebase configuration
-		const firebaseConfig = {
-		apiKey: "AIzaSyAg3rt06y_BmN521KMtPJQLMEp3yIEt0FQ",
-		authDomain: "enraizadas-95d63.firebaseapp.com",
-		projectId: "enraizadas-95d63",
-		storageBucket: "enraizadas-95d63.firebasestorage.app",
-		messagingSenderId: "93361321737",
-		appId: "1:93361321737:web:e4aac6bbf90354f58585d8"
-		};
+            // --- FUNÇÕES ---
+            const loadConfigFromStorage = () => {
+                const storedConfig = localStorage.getItem('lanchoneteConfig');
+                if (storedConfig) lanchoneteConfig = JSON.parse(storedConfig);
+            };
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
+            const saveConfigToStorage = () => {
+                localStorage.setItem('lanchoneteConfig', JSON.stringify(lanchoneteConfig));
+            };
 
-        // --- SELEÇÃO DE ELEMENTOS DO DOM ---
-        const lanchoneteNameElement = document.getElementById('lanchonete-name');
-        const menuContainer = document.getElementById('menu-container');
-        const cartItemsContainer = document.getElementById('cart-items');
-        const emptyCartMessage = document.getElementById('empty-cart-message');
-        const cartFooter = document.getElementById('cart-footer');
-        const totalPriceElement = document.getElementById('total-price');
-        const checkoutButton = document.getElementById('checkout-button');
-        const orderModal = document.getElementById('order-modal');
-        const closeModalButton = document.getElementById('close-modal-button');
-        const customerNameModal = document.getElementById('customer-name-modal');
-        const customerNameForm = document.getElementById('customer-name-form');
-        const cancelNameModalButton = document.getElementById('cancel-name-modal-button');
-        const adminButton = document.getElementById('admin-button');
-        const adminModal = document.getElementById('admin-modal');
-        const closeAdminModalButton = document.getElementById('close-admin-modal-button');
-        const configForm = document.getElementById('config-form');
-        const configNameInput = document.getElementById('config-name');
-        const adminMenuList = document.getElementById('admin-menu-list');
-        const menuItemForm = document.getElementById('menu-item-form');
-        const formTitle = document.getElementById('form-title');
-        const cancelEditBtn = document.getElementById('cancel-edit-btn');
-        const orderPasswordElement = document.getElementById('order-password');
-        const orderErrorMessage = document.getElementById('order-error-message');
+            const loadMenuFromStorage = () => {
+                const storedMenu = localStorage.getItem('lanchoneteMenu');
+                if (storedMenu) {
+                    menuItems = JSON.parse(storedMenu);
+                } else {
+                    menuItems = [
+                        { id: 1, name: "X-Burger Clássico", description: "Pão, hambúrguer de 150g, queijo, alface, tomate e molho especial.", price: 25.50 },
+                        { id: 2, name: "X-Bacon Supremo", description: "O clássico com fatias generosas de bacon crocante e queijo cheddar.", price: 29.90 },
+                    ];
+                    saveMenuToStorage();
+                }
+            };
+            
+            const saveMenuToStorage = () => localStorage.setItem('lanchoneteMenu', JSON.stringify(menuItems));
+            const formatCurrency = (value) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+            const renderLanchoneteName = () => lanchoneteNameElement.textContent = lanchoneteConfig.name;
 
-        // --- FUNÇÕES ---
-        const loadConfigFromStorage = () => {
-            const storedConfig = localStorage.getItem('lanchoneteConfig');
-            if (storedConfig) lanchoneteConfig = JSON.parse(storedConfig);
-        };
-
-        const saveConfigToStorage = () => {
-            localStorage.setItem('lanchoneteConfig', JSON.stringify(lanchoneteConfig));
-        };
-
-        const loadMenuFromStorage = () => {
-            const storedMenu = localStorage.getItem('lanchoneteMenu');
-            if (storedMenu) {
-                menuItems = JSON.parse(storedMenu);
-            } else {
-                menuItems = [
-                    { id: 1, name: "X-Burger Clássico", description: "Pão, hambúrguer de 150g, queijo, alface, tomate e molho especial.", price: 25.50 },
-                    { id: 2, name: "X-Bacon Supremo", description: "O clássico com fatias generosas de bacon crocante e queijo cheddar.", price: 29.90 },
-                ];
-                saveMenuToStorage();
+            const rerenderAll = () => {
+                renderLanchoneteName();
+                renderMenuItems();
+                renderCart();
+                renderAdminMenuList();
             }
-        };
-        
-        const saveMenuToStorage = () => localStorage.setItem('lanchoneteMenu', JSON.stringify(menuItems));
-        const formatCurrency = (value) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-        const renderLanchoneteName = () => lanchoneteNameElement.textContent = lanchoneteConfig.name;
 
-        const rerenderAll = () => {
-            renderLanchoneteName();
-            renderMenuItems();
-            renderCart();
-            renderAdminMenuList();
-        }
-
-        const renderMenuItems = () => {
-            menuContainer.innerHTML = '';
-            if(menuItems.length === 0) {
-                menuContainer.innerHTML = `<p class="text-gray-400 col-span-full text-center">Cardápio vazio. Adicione itens no painel.</p>`;
-                return;
-            }
-            menuItems.forEach(item => {
-                const menuItemElement = document.createElement('div');
-                menuItemElement.className = 'bg-gray-800 rounded-xl shadow-lg transform hover:-translate-y-1 transition-transform duration-300 flex flex-col p-4';
-                menuItemElement.innerHTML = `
-                    <div class="flex flex-col flex-grow">
-                        <h3 class="text-xl font-bold mb-2">${item.name}</h3>
-                        <p class="text-gray-400 text-sm mb-4 flex-grow">${item.description}</p>
-                        <div class="flex justify-between items-center mt-auto">
-                            <span class="text-2xl font-bold text-green-400">${formatCurrency(item.price)}</span>
-                            <button data-id="${item.id}" class="add-to-cart-btn bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors">Adicionar</button>
-                        </div>
-                    </div>`;
-                menuContainer.appendChild(menuItemElement);
-            });
-        };
-
-        const renderCart = () => {
-            cartItemsContainer.innerHTML = '';
-            if (cart.length === 0) {
-                emptyCartMessage.style.display = 'block';
-                cartFooter.style.display = 'none';
-            } else {
-                emptyCartMessage.style.display = 'none';
-                cartFooter.style.display = 'block';
-                cart.forEach(cartItem => {
-                    const cartItemElement = document.createElement('div');
-                    cartItemElement.className = 'flex justify-between items-center bg-gray-700 p-3 rounded-lg';
-                    cartItemElement.innerHTML = `
-                        <div>
-                            <p class="font-semibold">${cartItem.name}</p>
-                            <p class="text-sm text-gray-400">${formatCurrency(cartItem.price)}</p>
-                        </div>
-                        <div class="flex items-center gap-2">
-                            <button data-id="${cartItem.id}" class="decrease-quantity-btn bg-gray-600 hover:bg-gray-500 rounded-full w-6 h-6 flex items-center justify-center">-</button>
-                            <span class="font-bold w-4 text-center">${cartItem.quantity}</span>
-                            <button data-id="${cartItem.id}" class="increase-quantity-btn bg-gray-600 hover:bg-gray-500 rounded-full w-6 h-6 flex items-center justify-center">+</button>
+            const renderMenuItems = () => {
+                menuContainer.innerHTML = '';
+                if(menuItems.length === 0) {
+                    menuContainer.innerHTML = `<p class="text-gray-400 col-span-full text-center">Cardápio vazio. Adicione itens no painel.</p>`;
+                    return;
+                }
+                menuItems.forEach(item => {
+                    const menuItemElement = document.createElement('div');
+                    menuItemElement.className = 'bg-gray-800 rounded-xl shadow-lg transform hover:-translate-y-1 transition-transform duration-300 flex flex-col p-4';
+                    menuItemElement.innerHTML = `
+                        <div class="flex flex-col flex-grow">
+                            <h3 class="text-xl font-bold mb-2">${item.name}</h3>
+                            <p class="text-gray-400 text-sm mb-4 flex-grow">${item.description}</p>
+                            <div class="flex justify-between items-center mt-auto">
+                                <span class="text-2xl font-bold text-green-400">${formatCurrency(item.price)}</span>
+                                <button data-id="${item.id}" class="add-to-cart-btn bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors">Adicionar</button>
+                            </div>
                         </div>`;
-                    cartItemsContainer.appendChild(cartItemElement);
+                    menuContainer.appendChild(menuItemElement);
+                });
+            };
+
+            const renderCart = () => {
+                cartItemsContainer.innerHTML = '';
+                if (cart.length === 0) {
+                    emptyCartMessage.style.display = 'block';
+                    cartFooter.style.display = 'none';
+                } else {
+                    emptyCartMessage.style.display = 'none';
+                    cartFooter.style.display = 'block';
+                    cart.forEach(cartItem => {
+                        const cartItemElement = document.createElement('div');
+                        cartItemElement.className = 'flex justify-between items-center bg-gray-700 p-3 rounded-lg';
+                        cartItemElement.innerHTML = `
+                            <div class="flex-grow">
+                                <p class="font-semibold">${cartItem.name}</p>
+                                <p class="text-sm text-gray-400">${formatCurrency(cartItem.price)}</p>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <button data-id="${cartItem.id}" class="decrease-quantity-btn bg-gray-600 hover:bg-gray-500 rounded-full w-6 h-6 flex items-center justify-center">-</button>
+                                <span class="font-bold w-4 text-center">${cartItem.quantity}</span>
+                                <button data-id="${cartItem.id}" class="increase-quantity-btn bg-gray-600 hover:bg-gray-500 rounded-full w-6 h-6 flex items-center justify-center">+</button>
+                                <button data-id="${cartItem.id}" class="remove-from-cart-btn text-red-500 hover:text-red-400 p-1 rounded-full ml-1">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                                </button>
+                            </div>`;
+                        cartItemsContainer.appendChild(cartItemElement);
+                    });
+                }
+                updateTotal();
+            };
+
+            const renderAdminMenuList = () => {
+                adminMenuList.innerHTML = '';
+                 if(menuItems.length === 0) {
+                    adminMenuList.innerHTML = `<p class="text-gray-400 text-center">Nenhum item cadastrado.</p>`;
+                    return;
+                }
+                menuItems.forEach(item => {
+                    const itemElement = document.createElement('div');
+                    itemElement.className = 'flex items-center justify-between bg-gray-700 p-3 rounded-lg';
+                    itemElement.innerHTML = `
+                        <div>
+                            <p class="font-semibold">${item.name}</p>
+                            <p class="text-sm text-green-400">${formatCurrency(item.price)}</p>
+                        </div>
+                        <div class="flex gap-2">
+                            <button data-id="${item.id}" class="edit-item-btn p-2 bg-blue-600 hover:bg-blue-700 rounded-md"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg></button>
+                            <button data-id="${item.id}" class="delete-item-btn p-2 bg-red-600 hover:bg-red-700 rounded-md"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg></button>
+                        </div>`;
+                    adminMenuList.appendChild(itemElement);
                 });
             }
-            updateTotal();
-        };
 
-        const renderAdminMenuList = () => {
-            adminMenuList.innerHTML = '';
-             if(menuItems.length === 0) {
-                adminMenuList.innerHTML = `<p class="text-gray-400 text-center">Nenhum item cadastrado.</p>`;
-                return;
-            }
-            menuItems.forEach(item => {
-                const itemElement = document.createElement('div');
-                itemElement.className = 'flex items-center justify-between bg-gray-700 p-3 rounded-lg';
-                itemElement.innerHTML = `
-                    <div>
-                        <p class="font-semibold">${item.name}</p>
-                        <p class="text-sm text-green-400">${formatCurrency(item.price)}</p>
-                    </div>
-                    <div class="flex gap-2">
-                        <button data-id="${item.id}" class="edit-item-btn p-2 bg-blue-600 hover:bg-blue-700 rounded-md"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg></button>
-                        <button data-id="${item.id}" class="delete-item-btn p-2 bg-red-600 hover:bg-red-700 rounded-md"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg></button>
-                    </div>`;
-                adminMenuList.appendChild(itemElement);
-            });
-        }
+            const updateTotal = () => {
+                const total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+                totalPriceElement.textContent = formatCurrency(total);
+            };
 
-        const updateTotal = () => {
-            const total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
-            totalPriceElement.textContent = formatCurrency(total);
-        };
-
-        const openModal = (modalElement) => {
-            if (modalElement.id === 'admin-modal') configNameInput.value = lanchoneteConfig.name;
-            modalElement.classList.remove('hidden');
-            setTimeout(() => {
-               const innerDiv = modalElement.querySelector('.modal-enter');
-               if (innerDiv) {
-                   innerDiv.classList.remove('modal-enter');
-                   innerDiv.classList.add('modal-enter-active');
-               }
-            }, 10);
-        };
-
-        const closeModal = (modalElement) => {
-            const innerDiv = modalElement.querySelector('div[class*="modal-enter-active"]');
-            if (innerDiv) {
-                innerDiv.classList.add('modal-leave-active');
+            const openModal = (modalElement) => {
+                if (modalElement.id === 'admin-modal') configNameInput.value = lanchoneteConfig.name;
+                modalElement.classList.remove('hidden');
                 setTimeout(() => {
-                   modalElement.classList.add('hidden');
-                   innerDiv.classList.remove('modal-leave-active');
-                   innerDiv.classList.add('modal-enter');
-                }, 200);
-            }
-        };
+                   const innerDiv = modalElement.querySelector('.modal-enter');
+                   if (innerDiv) {
+                       innerDiv.classList.remove('modal-enter');
+                       innerDiv.classList.add('modal-enter-active');
+                   }
+                }, 10);
+            };
 
-        const addToCart = (itemId) => {
-            const existingItem = cart.find(item => item.id === itemId);
-            if (existingItem) existingItem.quantity++;
-            else {
-                const itemToAdd = menuItems.find(item => item.id === itemId);
-                if(itemToAdd) cart.push({ ...itemToAdd, quantity: 1 });
-            }
-            renderCart();
-        };
+            const closeModal = (modalElement) => {
+                const innerDiv = modalElement.querySelector('div[class*="modal-enter-active"]');
+                if (innerDiv) {
+                    innerDiv.classList.add('modal-leave-active');
+                    setTimeout(() => {
+                       modalElement.classList.add('hidden');
+                       innerDiv.classList.remove('modal-leave-active');
+                       innerDiv.classList.add('modal-enter');
+                    }, 200);
+                }
+            };
 
-        const updateQuantity = (itemId, change) => {
-            const cartItem = cart.find(item => item.id === itemId);
-            if (cartItem) {
-                cartItem.quantity += change;
-                if (cartItem.quantity <= 0) cart = cart.filter(item => item.id !== itemId);
-            }
-            renderCart();
-        };
-        
-        const submitOrder = async (customerName) => {
-            if (cart.length === 0) {
-                orderErrorMessage.textContent = "Seu carrinho está vazio.";
-                return;
-            }
-            if (!db) {
-                orderErrorMessage.textContent = "Erro de conexão. Tente novamente.";
-                console.error("A variável 'db' do Firestore não está inicializada.");
-                return;
-            }
+            const addToCart = (itemId) => {
+                const existingItem = cart.find(item => item.id === itemId);
+                if (existingItem) existingItem.quantity++;
+                else {
+                    const itemToAdd = menuItems.find(item => item.id === itemId);
+                    if(itemToAdd) cart.push({ ...itemToAdd, quantity: 1 });
+                }
+                renderCart();
+            };
 
-            const submitButton = document.getElementById('submit-order-button');
-            submitButton.disabled = true;
-            submitButton.textContent = "Enviando...";
-            orderErrorMessage.textContent = '';
+            const updateQuantity = (itemId, change) => {
+                const cartItem = cart.find(item => item.id === itemId);
+                if (cartItem) {
+                    cartItem.quantity += change;
+                    if (cartItem.quantity <= 0) cart = cart.filter(item => item.id !== itemId);
+                }
+                renderCart();
+            };
 
-            try {
-                const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-                
-                // --- MUDANÇA PARA DEBUG ---
-                // Tenta primeiro a transação, se falhar, tenta com senha aleatória.
-                let newPassword;
+            const removeFromCart = (itemId) => {
+                cart = cart.filter(item => item.id !== itemId);
+                renderCart();
+            };
+            
+            const submitOrder = async (customerName) => {
+                if (!db) {
+                    orderErrorMessage.textContent = "Erro de conexão. Tente novamente.";
+                    console.error("A variável 'db' do Firestore não está inicializada.");
+                    return;
+                }
+
+                const submitButton = document.getElementById('submit-order-button');
+                submitButton.disabled = true;
+                submitButton.textContent = "Enviando...";
+                orderErrorMessage.textContent = '';
+
                 try {
-                    const counterRef = doc(db, `artifacts/${appId}/public/data/counters`, 'orderCounter');
-                    newPassword = await runTransaction(db, async (transaction) => {
+                    const counterRef = doc(db, 'counters', 'orderCounter');
+                    
+                    const newPassword = await runTransaction(db, async (transaction) => {
                         const counterDoc = await transaction.get(counterRef);
                         if (!counterDoc.exists()) {
                             transaction.set(counterRef, { currentNumber: 1 });
@@ -446,155 +450,223 @@ const app = initializeApp(firebaseConfig);
                         transaction.update(counterRef, { currentNumber: newNumber });
                         return newNumber;
                     });
-                } catch (transactionError) {
-                    console.warn("A transação da senha falhou, usando senha aleatória.", transactionError);
-                    newPassword = Math.floor(Math.random() * 900) + 100; // Senha aleatória de 3 dígitos
+
+                    const order = {
+                        customerName: customerName,
+                        password: newPassword,
+                        items: cart,
+                        total: cart.reduce((sum, item) => sum + item.price * item.quantity, 0),
+                        status: 'pendente',
+                        createdAt: serverTimestamp()
+                    };
+                    
+                    const docRef = await addDoc(collection(db, 'pedidos'), order);
+                    console.log("Pedido salvo com sucesso! Documento ID: ", docRef.id);
+
+                    orderPasswordElement.textContent = newPassword;
+                    closeModal(customerNameModal);
+                    openModal(orderModal);
+                    cart = [];
+                    renderCart();
+
+                } catch (e) {
+                    console.error("ERRO DETALHADO AO ADICIONAR PEDIDO: ", e);
+                    orderErrorMessage.textContent = "Falha ao enviar. Tente novamente.";
+                } finally {
+                    submitButton.disabled = false;
+                    submitButton.textContent = "Confirmar Pedido";
                 }
-
-                const order = {
-                    customerName: customerName,
-                    password: newPassword,
-                    items: cart,
-                    total: cart.reduce((sum, item) => sum + item.price * item.quantity, 0),
-                    status: 'pendente',
-                    createdAt: serverTimestamp()
-                };
-                
-                const docRef = await addDoc(collection(db, `artifacts/${appId}/public/data/pedidos`), order);
-                console.log("Pedido salvo com sucesso! Documento ID: ", docRef.id);
-
-                orderPasswordElement.textContent = newPassword;
-                closeModal(customerNameModal);
-                openModal(orderModal);
-                cart = [];
-                renderCart();
-
-            } catch (e) {
-                console.error("ERRO DETALHADO AO ADICIONAR PEDIDO: ", e);
-                orderErrorMessage.textContent = "Falha ao enviar. Verifique o console.";
-            } finally {
-                submitButton.disabled = false;
-                submitButton.textContent = "Confirmar Pedido";
-            }
-        };
-
-        const handleEditItem = (itemId) => {
-            const item = menuItems.find(i => i.id === itemId);
-            if(item) {
-                editingItemId = item.id;
-                document.getElementById('item-id').value = item.id;
-                document.getElementById('item-name').value = item.name;
-                document.getElementById('item-description').value = item.description;
-                document.getElementById('item-price').value = item.price;
-                formTitle.textContent = "Editar Item";
-                cancelEditBtn.classList.remove('hidden');
-            }
-        };
-        
-        const handleDeleteItem = (itemId) => {
-            menuItems = menuItems.filter(item => item.id !== itemId);
-            saveMenuToStorage();
-            rerenderAll();
-        };
-
-        const resetForm = () => {
-            menuItemForm.reset();
-            editingItemId = null;
-            formTitle.textContent = "Adicionar Novo Item";
-            cancelEditBtn.classList.add('hidden');
-        }
-        
-        // --- EVENT LISTENERS ---
-        document.body.addEventListener('click', (event) => {
-            const target = event.target.closest('button');
-            if (!target) return;
-            if (target.id === 'copy-pix-button') {
-                const pixKeyInput = document.getElementById('pix-key-input');
-                const copyPixText = document.getElementById('copy-pix-text');
-                pixKeyInput.select();
-                pixKeyInput.setSelectionRange(0, 99999);
-                try {
-                    document.execCommand('copy');
-                    copyPixText.textContent = 'Copiado!';
-                    target.classList.replace('bg-indigo-600', 'bg-green-600');
-                    setTimeout(() => {
-                        copyPixText.textContent = 'Copiar';
-                        target.classList.replace('bg-green-600', 'bg-indigo-600');
-                    }, 2000);
-                } catch (err) {
-                    console.error('Falha ao copiar a chave Pix:', err);
-                }
-                return;
-            }
-            const itemId = parseInt(target.dataset.id);
-            if (target.classList.contains('add-to-cart-btn')) addToCart(itemId);
-            if (target.classList.contains('increase-quantity-btn')) updateQuantity(itemId, 1);
-            if (target.classList.contains('decrease-quantity-btn')) updateQuantity(itemId, -1);
-            if (target.classList.contains('edit-item-btn')) handleEditItem(itemId);
-            if (target.classList.contains('delete-item-btn')) handleDeleteItem(itemId);
-        });
-        
-        checkoutButton.addEventListener('click', () => {
-            if (cart.length > 0) openModal(customerNameModal);
-        });
-        customerNameForm.addEventListener('submit', (e) => {
-            e.preventDefault();
-            const customerName = document.getElementById('customer-name').value.trim();
-            if (customerName) {
-                submitOrder(customerName);
-            }
-        });
-        cancelNameModalButton.addEventListener('click', () => {
-            closeModal(customerNameModal);
-            customerNameForm.reset();
-            orderErrorMessage.textContent = '';
-        });
-
-        closeModalButton.addEventListener('click', () => {
-             closeModal(orderModal)
-             customerNameForm.reset(); // Limpa o nome aqui
-        });
-        adminButton.addEventListener('click', () => openModal(adminModal));
-        closeAdminModalButton.addEventListener('click', () => closeModal(adminModal));
-        cancelEditBtn.addEventListener('click', resetForm);
-
-        configForm.addEventListener('submit', (e) => {
-            e.preventDefault();
-            const newName = configNameInput.value.trim();
-            if (newName) {
-                lanchoneteConfig.name = newName;
-                saveConfigToStorage();
-                renderLanchoneteName();
-                const submitButton = configForm.querySelector('button[type="submit"]');
-                const originalText = submitButton.textContent;
-                submitButton.textContent = 'Salvo!';
-                setTimeout(() => submitButton.textContent = originalText, 1500);
-            }
-        });
-
-        menuItemForm.addEventListener('submit', (e) => {
-            e.preventDefault();
-            const formData = {
-                id: editingItemId || Date.now(),
-                name: document.getElementById('item-name').value,
-                description: document.getElementById('item-description').value,
-                price: parseFloat(document.getElementById('item-price').value),
             };
-            if (editingItemId) {
-                const index = menuItems.findIndex(item => item.id === editingItemId);
-                if (index > -1) menuItems[index] = formData;
-            } else {
-                menuItems.push(formData);
-            }
-            saveMenuToStorage();
-            rerenderAll();
-            resetForm();
-        });
 
-        // --- INICIALIZAÇÃO DA APLICAÇÃO ---
-        loadConfigFromStorage();
-        loadMenuFromStorage();
-        rerenderAll();
+            const handleEditItem = (itemId) => {
+                const item = menuItems.find(i => i.id === itemId);
+                if(item) {
+                    editingItemId = item.id;
+                    document.getElementById('item-id').value = item.id;
+                    document.getElementById('item-name').value = item.name;
+                    document.getElementById('item-description').value = item.description;
+                    document.getElementById('item-price').value = item.price;
+                    formTitle.textContent = "Editar Item";
+                    cancelEditBtn.classList.remove('hidden');
+                }
+            };
+            
+            const handleDeleteItem = (itemId) => {
+                menuItems = menuItems.filter(item => item.id !== itemId);
+                saveMenuToStorage();
+                rerenderAll();
+            };
+
+            const resetForm = () => {
+                menuItemForm.reset();
+                editingItemId = null;
+                formTitle.textContent = "Adicionar Novo Item";
+                cancelEditBtn.classList.add('hidden');
+            }
+            
+            // --- EVENT LISTENERS ---
+            document.body.addEventListener('click', (event) => {
+                const target = event.target.closest('button');
+                if (!target) return;
+                if (target.id === 'copy-pix-button') {
+                    const pixKeyInput = document.getElementById('pix-key-input');
+                    const copyPixText = document.getElementById('copy-pix-text');
+                    pixKeyInput.select();
+                    pixKeyInput.setSelectionRange(0, 99999);
+                    try {
+                        document.execCommand('copy');
+                        copyPixText.textContent = 'Copiado!';
+                        target.classList.replace('bg-indigo-600', 'bg-green-600');
+                        setTimeout(() => {
+                            copyPixText.textContent = 'Copiar';
+                            target.classList.replace('bg-green-600', 'bg-indigo-600');
+                        }, 2000);
+                    } catch (err) {
+                        console.error('Falha ao copiar a chave Pix:', err);
+                    }
+                    return;
+                }
+                const itemId = parseInt(target.dataset.id);
+                if (target.classList.contains('add-to-cart-btn')) addToCart(itemId);
+                if (target.classList.contains('increase-quantity-btn')) updateQuantity(itemId, 1);
+                if (target.classList.contains('decrease-quantity-btn')) updateQuantity(itemId, -1);
+                if (target.classList.contains('remove-from-cart-btn')) removeFromCart(itemId);
+                if (target.classList.contains('edit-item-btn')) handleEditItem(itemId);
+                if (target.classList.contains('delete-item-btn')) handleDeleteItem(itemId);
+            });
+            
+            checkoutButton.addEventListener('click', () => {
+                if (cart.length > 0) openModal(customerNameModal);
+            });
+
+            customerNameForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const customerName = document.getElementById('customer-name').value.trim();
+                if (customerName) {
+                    submitOrder(customerName);
+                }
+            });
+
+            cancelNameModalButton.addEventListener('click', () => {
+                closeModal(customerNameModal);
+                customerNameForm.reset();
+                orderErrorMessage.textContent = '';
+            });
+
+            closeModalButton.addEventListener('click', () => {
+                 closeModal(orderModal)
+                 customerNameForm.reset();
+            });
+
+            adminButton.addEventListener('click', () => openModal(passwordModal));
+            
+            closeAdminModalButton.addEventListener('click', () => closeModal(adminModal));
+            
+            passwordForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const passwordInput = document.getElementById('admin-password');
+                const enteredPassword = passwordInput.value;
+                const correctPassword = 'admin'; // Senha para o painel. Mude se desejar.
+
+                if (enteredPassword === correctPassword) {
+                    closeModal(passwordModal);
+                    openModal(adminModal);
+                    passwordForm.reset();
+                    passwordErrorMessage.textContent = '';
+                } else {
+                    passwordErrorMessage.textContent = 'Senha incorreta.';
+                    passwordForm.reset();
+                }
+            });
+
+            cancelPasswordModalButton.addEventListener('click', () => {
+                closeModal(passwordModal);
+                passwordForm.reset();
+                passwordErrorMessage.textContent = '';
+            });
+
+            cancelEditBtn.addEventListener('click', resetForm);
+
+            configForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const newName = configNameInput.value.trim();
+                if (newName) {
+                    lanchoneteConfig.name = newName;
+                    saveConfigToStorage();
+                    renderLanchoneteName();
+                    const submitButton = configForm.querySelector('button[type="submit"]');
+                    const originalText = submitButton.textContent;
+                    submitButton.textContent = 'Salvo!';
+                    setTimeout(() => submitButton.textContent = originalText, 1500);
+                }
+            });
+
+            menuItemForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const formData = {
+                    id: editingItemId || Date.now(),
+                    name: document.getElementById('item-name').value,
+                    description: document.getElementById('item-description').value,
+                    price: parseFloat(document.getElementById('item-price').value),
+                };
+                if (editingItemId) {
+                    const index = menuItems.findIndex(item => item.id === editingItemId);
+                    if (index > -1) menuItems[index] = formData;
+                } else {
+                    menuItems.push(formData);
+                }
+                saveMenuToStorage();
+                rerenderAll();
+                resetForm();
+            });
+
+            // --- INICIALIZAÇÃO DA APLICAÇÃO (UI) ---
+            loadConfigFromStorage();
+            loadMenuFromStorage();
+            rerenderAll();
+
+            // --- INICIALIZAÇÃO FIREBASE (ÚLTIMO PASSO) ---
+            (async () => {
+                try {
+                    const firebaseConfigStr = typeof __firebase_config !== 'undefined' 
+                        ? __firebase_config 
+                        : JSON.stringify({
+                            apiKey: "AIzaSyAg3rt06y_BmN521KMtPJQLMEp3yIEt0FQ",
+                            authDomain: "enraizadas-95d63.firebaseapp.com",
+                            projectId: "enraizadas-95d63",
+                            storageBucket: "enraizadas-95d63.appspot.com",
+                            messagingSenderId: "93361321737",
+                            appId: "1:93361321737:web:e4aac6bbf90354f58585d8"
+                        });
+                    const firebaseConfig = JSON.parse(firebaseConfigStr);
+
+                    if (!firebaseConfig.apiKey) {
+                        throw new Error("Configuração do Firebase não foi encontrada ou é inválida.");
+                    }
+
+                    const app = initializeApp(firebaseConfig);
+                    db = getFirestore(app);
+                    const auth = getAuth(app);
+                    
+                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                        await signInWithCustomToken(auth, __initial_auth_token);
+                    } else {
+                        await signInAnonymously(auth);
+                    }
+                    
+                    console.log("Firebase inicializado e autenticado com sucesso.");
+
+                } catch (error) {
+                    console.error("Erro ao inicializar o Firebase.", error);
+                    if(checkoutButton) {
+                        checkoutButton.textContent = "Sistema Offline";
+                        checkoutButton.disabled = true;
+                        checkoutButton.classList.remove('bg-green-600', 'hover:bg-green-700');
+                        checkoutButton.classList.add('bg-gray-500', 'cursor-not-allowed');
+                    }
+                }
+            })();
+        });
     </script>
 </body>
 </html>
