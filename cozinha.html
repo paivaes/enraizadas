@@ -31,10 +31,22 @@
         }
 
         @media print {
-            body * { visibility: hidden; }
-            .print-area, .print-area * { visibility: visible; }
-            .print-area { position: absolute; left: 0; top: 0; width: 100%; color: black !important; }
-            .no-print { display: none; }
+            body * {
+                visibility: hidden;
+            }
+            #print-area, #print-area * {
+                visibility: visible;
+            }
+            #print-area {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+                color: black !important;
+            }
+            .no-print {
+                display: none;
+            }
         }
     </style>
 </head>
@@ -81,6 +93,25 @@
         </div>
     </div>
 
+    <!-- Modal de Senha para Excluir Pedido -->
+    <div id="delete-password-modal" class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center hidden z-50 no-print">
+        <div class="bg-gray-800 rounded-2xl p-8 max-w-sm w-11/12 text-center shadow-2xl modal-enter">
+            <h3 class="text-2xl font-bold mb-4">Confirmar Exclusão</h3>
+            <p class="text-gray-400 mb-6">Para excluir este pedido, por favor, insira a senha de administrador.</p>
+            <form id="delete-password-form">
+                <div>
+                    <label for="delete-admin-password" class="block text-sm font-medium text-gray-300 text-left mb-1">Senha</label>
+                    <input type="password" id="delete-admin-password" required class="block w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+                <p id="delete-password-error-message" class="text-red-400 text-sm mt-2 h-4"></p>
+                <div class="mt-4 flex gap-2">
+                    <button type="button" id="cancel-delete-modal-button" class="w-full bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg transition-colors">Cancelar</button>
+                    <button type="submit" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">Confirmar Exclusão</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getFirestore, collection, onSnapshot, query, doc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
@@ -89,6 +120,7 @@
         document.addEventListener('DOMContentLoaded', () => {
             let db;
             let allOrdersCache = [];
+            let orderIdToDelete = null;
             const ordersContainer = document.getElementById('orders-container');
             const loadingOrders = document.getElementById('loading-orders');
             const printArea = document.getElementById('print-area');
@@ -99,6 +131,10 @@
             const reportModal = document.getElementById('report-modal');
             const closeReportModalButton = document.getElementById('close-report-modal-button');
             const exportReportButton = document.getElementById('export-report-button');
+            const deletePasswordModal = document.getElementById('delete-password-modal');
+            const deletePasswordForm = document.getElementById('delete-password-form');
+            const cancelDeleteModalButton = document.getElementById('cancel-delete-modal-button');
+            const deletePasswordErrorMessage = document.getElementById('delete-password-error-message');
 
             const openModal = (modalElement) => {
                 modalElement.classList.remove('hidden');
@@ -173,36 +209,46 @@
 
             const handlePrint = (pedido) => {
                 const time = pedido.createdAt ? new Date(pedido.createdAt.seconds * 1000) : new Date();
-                let printContent = `
-                    <div style="font-family: monospace; padding: 10px;">
-                        <h2 style="text-align: center; font-size: 1.2em; margin-bottom: 10px;">Lanchonete</h2>
-                        <p>Pedido: #${pedido.id.substring(0, 5)}</p>
-                        <p>Cliente: <strong>${pedido.customerName}</strong></p>
-                        <p>Senha: <strong>${pedido.password}</strong></p>
-                        <p>Data: ${time.toLocaleDateString('pt-BR')} ${time.toLocaleTimeString('pt-BR')}</p>
-                        <hr style="border-top: 1px dashed black; margin: 10px 0;">
-                        ${pedido.items.map(item => `
-                            <div style="display: flex; justify-content: space-between;">
-                                <span>${item.quantity}x ${item.name}</span>
-                                <span>${formatCurrency(item.price * item.quantity)}</span>
-                            </div>
-                        `).join('')}
-                        <hr style="border-top: 1px dashed black; margin: 10px 0;">
-                        <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: 1.1em;">
-                            <span>Total:</span>
-                            <span>${formatCurrency(pedido.total)}</span>
+                
+                const comandaBody = `
+                    <h2 style="text-align: center; font-size: 1.2em; margin-bottom: 10px;">Lanchonete</h2>
+                    <p>Pedido: #${pedido.id.substring(0, 5)}</p>
+                    <p>Cliente: <strong>${pedido.customerName}</strong></p>
+                    <p>Senha: <strong>${pedido.password}</strong></p>
+                    <p>Data: ${time.toLocaleDateString('pt-BR')} ${time.toLocaleTimeString('pt-BR')}</p>
+                    <hr style="border-top: 1px dashed black; margin: 10px 0;">
+                    ${pedido.items.map(item => `
+                        <div style="display: flex; justify-content: space-between;">
+                            <span>${item.quantity}x ${item.name}</span>
+                            <span>${formatCurrency(item.price * item.quantity)}</span>
                         </div>
+                    `).join('')}
+                    <hr style="border-top: 1px dashed black; margin: 10px 0;">
+                    <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: 1.1em;">
+                        <span>Total:</span>
+                        <span>${formatCurrency(pedido.total)}</span>
                     </div>
                 `;
+
+                let printContent = `
+                    <div style="font-family: monospace; padding: 10px;">
+                        <h3 style="text-align: center; font-weight: bold; margin-bottom: 10px;">--- VIA COZINHA ---</h3>
+                        ${comandaBody}
+                    </div>
+                    <div style="border-top: 2px dashed black; margin: 20px 0;"></div>
+                    <div style="font-family: monospace; padding: 10px;">
+                        <h3 style="text-align: center; font-weight: bold; margin-bottom: 10px;">--- VIA CAIXA ---</h3>
+                        ${comandaBody}
+                    </div>
+                `;
+
                 printArea.innerHTML = printContent;
                 printArea.classList.remove('hidden');
 
-                window.onafterprint = () => {
+                setTimeout(() => {
+                    window.print();
                     printArea.classList.add('hidden');
-                    window.onafterprint = null;
-                };
-
-                window.print();
+                }, 100);
             };
             
             const showDailyReport = () => {
@@ -262,12 +308,10 @@
                 printArea.innerHTML = printContent;
                 printArea.classList.remove('hidden');
                 
-                window.onafterprint = () => {
+                setTimeout(() => {
+                    window.print();
                     printArea.classList.add('hidden');
-                    window.onafterprint = null;
-                };
-
-                window.print();
+                }, 100);
             };
 
 
@@ -282,15 +326,20 @@
                 }
             };
             
-            const deleteOrder = async (pedidoId) => {
-                if (!db) return;
-                if (confirm('Tem certeza que deseja excluir este pedido permanentemente?')) {
-                    try {
-                        await deleteDoc(doc(db, "pedidos", pedidoId));
-                    } catch (error) {
-                        console.error("Erro ao excluir pedido: ", error);
-                        alert("Não foi possível excluir o pedido.");
-                    }
+            const promptDeleteOrder = (pedidoId) => {
+                orderIdToDelete = pedidoId;
+                openModal(deletePasswordModal);
+            };
+
+            const executeDeleteOrder = async () => {
+                if (!db || !orderIdToDelete) return;
+                try {
+                    await deleteDoc(doc(db, "pedidos", orderIdToDelete));
+                } catch (error) {
+                    console.error("Erro ao excluir pedido: ", error);
+                    alert("Não foi possível excluir o pedido.");
+                } finally {
+                    orderIdToDelete = null; 
                 }
             };
 
@@ -377,13 +426,37 @@
                     if (pedido) updateStatus(orderId, pedido.status);
                 }
                 if (target.classList.contains('delete-btn')) {
-                    deleteOrder(orderId);
+                    promptDeleteOrder(orderId);
                 }
             });
             
             reportButton.addEventListener('click', showDailyReport);
             closeReportModalButton.addEventListener('click', () => closeModal(reportModal));
             exportReportButton.addEventListener('click', exportAndPrintReport);
+
+            deletePasswordForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const passwordInput = document.getElementById('delete-admin-password');
+                const enteredPassword = passwordInput.value;
+                const correctPassword = 'admin';
+
+                if (enteredPassword === correctPassword) {
+                    await executeDeleteOrder();
+                    closeModal(deletePasswordModal);
+                    deletePasswordForm.reset();
+                    deletePasswordErrorMessage.textContent = '';
+                } else {
+                    deletePasswordErrorMessage.textContent = 'Senha incorreta.';
+                    passwordInput.value = '';
+                }
+            });
+
+            cancelDeleteModalButton.addEventListener('click', () => {
+                closeModal(deletePasswordModal);
+                deletePasswordForm.reset();
+                deletePasswordErrorMessage.textContent = '';
+                orderIdToDelete = null;
+            });
         });
     </script>
 </body>
