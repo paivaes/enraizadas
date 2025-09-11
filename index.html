@@ -533,7 +533,7 @@
                         await deleteDoc(doc(db, "cardapio", itemId));
                     } catch (error) {
                         console.error("Erro ao apagar item: ", error);
-                        alert("Falha ao apagar item.");
+                        alert("Falha ao apagar item. Verifique as permissões no Firebase.");
                     }
                 }
             };
@@ -647,7 +647,7 @@
                         }, 1500);
                     } catch (error) {
                         console.error("Erro ao salvar nome:", error);
-                        alert("Falha ao salvar nome.");
+                        alert("Falha ao salvar nome. Verifique as permissões no Firebase.");
                         submitButton.disabled = false;
                     }
                 }
@@ -673,7 +673,7 @@
                     resetForm();
                 } catch (error) {
                     console.error("Erro ao salvar item:", error);
-                    alert("Falha ao salvar o item.");
+                    alert("Falha ao salvar o item. Verifique as permissões no Firebase.");
                 }
             });
 
@@ -736,6 +736,7 @@
                     rerenderAll();
                 }, (error) => {
                     console.error("Erro ao buscar cardápio em tempo real: ", error);
+                     menuContainer.innerHTML = `<p class="text-red-400 col-span-full text-center">Erro de permissão ao carregar o cardápio. Verifique as Regras de Segurança no seu painel do Firebase.</p>`;
                 });
             };
 
@@ -753,6 +754,9 @@
                            } catch(e){ console.error("Erro ao criar config inicial", e)}
                         })();
                     }
+                }, (error) => {
+                    console.error("Erro ao buscar configurações em tempo real: ", error);
+                     alert("Erro de permissão ao carregar as configurações. Verifique as Regras de Segurança no seu painel do Firebase.");
                 });
             };
 
