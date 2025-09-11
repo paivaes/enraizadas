@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale-1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Painel da Cozinha</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -14,10 +14,26 @@
         ::-webkit-scrollbar-track { background: #1f2937; }
         ::-webkit-scrollbar-thumb { background: #4f46e5; border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: #6366f1; }
+        
+        .modal-enter {
+            opacity: 0;
+            transform: scale(0.95);
+        }
+        .modal-enter-active {
+            opacity: 1;
+            transform: scale(1);
+            transition: all 200ms ease-out;
+        }
+        .modal-leave-active {
+            opacity: 0;
+            transform: scale(0.95);
+            transition: all 200ms ease-in;
+        }
+
         @media print {
             body * { visibility: hidden; }
-            #print-area, #print-area * { visibility: visible; }
-            #print-area { position: absolute; left: 0; top: 0; width: 100%; }
+            .print-area, .print-area * { visibility: visible; }
+            .print-area { position: absolute; left: 0; top: 0; width: 100%; color: black !important; }
             .no-print { display: none; }
         }
     </style>
@@ -25,14 +41,17 @@
 <body class="bg-gray-900 text-white">
 
     <div class="container mx-auto p-4 md:p-8">
-        <header class="flex justify-between items-center mb-8">
+        <header class="flex flex-wrap justify-between items-center mb-8 gap-4">
             <h1 class="text-3xl md:text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-500">Painel da Cozinha</h1>
-            <div class="flex items-center gap-2">
-                <span class="relative flex h-3 w-3">
-                  <span id="connection-ping" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                  <span id="connection-dot" class="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
-                </span>
-                <span id="connection-status" class="text-green-400">Conectado</span>
+            <div class="flex items-center gap-4">
+                <div class="flex items-center gap-2">
+                    <span class="relative flex h-3 w-3">
+                      <span id="connection-ping" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                      <span id="connection-dot" class="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+                    </span>
+                    <span id="connection-status" class="text-green-400">Conectado</span>
+                </div>
+                <button id="report-button" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">Fechar Caixa</button>
             </div>
         </header>
 
@@ -44,136 +63,293 @@
         </div>
     </div>
     
-    <div id="print-area" class="hidden bg-white text-black p-4 text-xs"></div>
+    <div id="print-area" class="hidden bg-white text-black p-4 text-xs print-area"></div>
+
+    <!-- Modal de Relatório de Caixa -->
+    <div id="report-modal" class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center hidden z-50 no-print">
+        <div class="bg-gray-800 rounded-2xl p-8 max-w-2xl w-11/12 shadow-2xl modal-enter max-h-[90vh] flex flex-col">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-2xl font-bold">Relatório do Dia</h2>
+                <button id="close-report-modal-button" class="text-gray-400 hover:text-white text-3xl leading-none">&times;</button>
+            </div>
+            <div id="report-content" class="flex-grow overflow-y-auto pr-2">
+                <!-- Conteúdo do relatório será inserido aqui -->
+            </div>
+            <div class="mt-6 pt-4 border-t border-gray-700 flex gap-2">
+                <button id="export-report-button" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">Exportar / Imprimir</button>
+            </div>
+        </div>
+    </div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getFirestore, collection, onSnapshot, query, doc, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 
-        let db;
-        let allOrdersCache = []; // Cache para armazenar os pedidos atuais
-        const ordersContainer = document.getElementById('orders-container');
-        const loadingOrders = document.getElementById('loading-orders');
-        const printArea = document.getElementById('print-area');
-        const connectionStatus = document.getElementById('connection-status');
-        const connectionPing = document.getElementById('connection-ping');
-        const connectionDot = document.getElementById('connection-dot');
+        document.addEventListener('DOMContentLoaded', () => {
+            let db;
+            let allOrdersCache = [];
+            const ordersContainer = document.getElementById('orders-container');
+            const loadingOrders = document.getElementById('loading-orders');
+            const printArea = document.getElementById('print-area');
+            const connectionStatus = document.getElementById('connection-status');
+            const connectionPing = document.getElementById('connection-ping');
+            const connectionDot = document.getElementById('connection-dot');
+            const reportButton = document.getElementById('report-button');
+            const reportModal = document.getElementById('report-modal');
+            const closeReportModalButton = document.getElementById('close-report-modal-button');
+            const exportReportButton = document.getElementById('export-report-button');
 
-        const formatCurrency = (value) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+            const openModal = (modalElement) => {
+                modalElement.classList.remove('hidden');
+                setTimeout(() => {
+                   const innerDiv = modalElement.querySelector('.modal-enter');
+                   if (innerDiv) {
+                       innerDiv.classList.remove('modal-enter');
+                       innerDiv.classList.add('modal-enter-active');
+                   }
+                }, 10);
+            };
 
-        const renderOrders = (orders) => {
-            loadingOrders.style.display = 'none';
-            ordersContainer.innerHTML = '';
+            const closeModal = (modalElement) => {
+                const innerDiv = modalElement.querySelector('div[class*="modal-enter-active"]');
+                if (innerDiv) {
+                    innerDiv.classList.add('modal-leave-active');
+                    setTimeout(() => {
+                       modalElement.classList.add('hidden');
+                       innerDiv.classList.remove('modal-leave-active');
+                       innerDiv.classList.add('modal-enter');
+                    }, 200);
+                }
+            };
 
-            if (orders.length === 0) {
-                ordersContainer.innerHTML = `<p class="text-gray-400 col-span-full text-center">Nenhum pedido pendente.</p>`;
-                return;
-            }
+            const formatCurrency = (value) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-            orders.forEach(pedido => {
-                const orderCard = document.createElement('div');
-                const isDone = pedido.status === 'concluido';
-                orderCard.className = `p-5 rounded-xl shadow-lg transition-all duration-300 ${isDone ? 'bg-green-900 border-green-700' : 'bg-gray-800'}`;
-                orderCard.innerHTML = `
-                    <div class="flex justify-between items-start">
-                        <div>
-                            <h3 class="text-xl font-bold">${pedido.customerName || 'Cliente não informado'}</h3>
-                            <p class="text-sm text-gray-400">#${pedido.id.substring(0, 5)} - ${pedido.createdAt ? new Date(pedido.createdAt.seconds * 1000).toLocaleTimeString('pt-BR') : ''}</p>
+            const renderOrders = (orders) => {
+                allOrdersCache = orders;
+                loadingOrders.style.display = 'none';
+                ordersContainer.innerHTML = '';
+
+                if (orders.length === 0) {
+                    ordersContainer.innerHTML = `<p class="text-gray-400 col-span-full text-center">Nenhum pedido pendente.</p>`;
+                    return;
+                }
+
+                orders.forEach(pedido => {
+                    const orderCard = document.createElement('div');
+                    const isDone = pedido.status === 'concluido';
+                    orderCard.className = `p-5 rounded-xl shadow-lg transition-all duration-300 ${isDone ? 'bg-green-900 border-green-700' : 'bg-gray-800'}`;
+                    orderCard.innerHTML = `
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <h3 class="text-xl font-bold">${pedido.customerName || 'Cliente não informado'}</h3>
+                                <p class="text-sm text-gray-400">#${pedido.id.substring(0, 5)} - ${pedido.createdAt ? new Date(pedido.createdAt.seconds * 1000).toLocaleTimeString('pt-BR') : ''}</p>
+                            </div>
+                            <div class="text-center bg-indigo-600 p-3 rounded-lg">
+                                <span class="block text-sm font-medium text-indigo-200">Senha</span>
+                                <span class="block text-3xl font-bold">${pedido.password || '-'}</span>
+                            </div>
                         </div>
-                        <div class="text-center bg-indigo-600 p-3 rounded-lg">
-                            <span class="block text-sm font-medium text-indigo-200">Senha</span>
-                            <span class="block text-3xl font-bold">${pedido.password || '-'}</span>
+                        <div class="mt-4 border-t border-gray-700 pt-4">
+                            ${pedido.items.map(item => `
+                                <div class="flex justify-between text-sm mb-1">
+                                    <span class="text-gray-300">${item.quantity}x ${item.name}</span>
+                                    <span class="font-medium">${formatCurrency(item.price * item.quantity)}</span>
+                                </div>
+                            `).join('')}
                         </div>
-                    </div>
-                    <div class="mt-4 border-t border-gray-700 pt-4">
+                        <div class="mt-4 pt-4 border-t border-gray-600 flex justify-between items-center">
+                            <span class="text-lg font-bold">Total: ${formatCurrency(pedido.total)}</span>
+                        </div>
+                        <div class="mt-4 flex gap-2 no-print">
+                            <button data-id="${pedido.id}" class="print-btn w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">Imprimir</button>
+                            <button data-id="${pedido.id}" class="status-btn w-full ${isDone ? 'bg-yellow-600 hover:bg-yellow-700' : 'bg-green-600 hover:bg-green-700'} text-white font-bold py-2 px-4 rounded-lg transition-colors">${isDone ? 'Reabrir' : 'Concluir'}</button>
+                        </div>
+                    `;
+                    ordersContainer.appendChild(orderCard);
+                });
+            };
+
+            const handlePrint = (pedido) => {
+                const time = pedido.createdAt ? new Date(pedido.createdAt.seconds * 1000) : new Date();
+                let printContent = `
+                    <div style="font-family: monospace; padding: 10px;">
+                        <h2 style="text-align: center; font-size: 1.2em; margin-bottom: 10px;">Lanchonete</h2>
+                        <p>Pedido: #${pedido.id.substring(0, 5)}</p>
+                        <p>Cliente: <strong>${pedido.customerName}</strong></p>
+                        <p>Senha: <strong>${pedido.password}</strong></p>
+                        <p>Data: ${time.toLocaleDateString('pt-BR')} ${time.toLocaleTimeString('pt-BR')}</p>
+                        <hr style="border-top: 1px dashed black; margin: 10px 0;">
                         ${pedido.items.map(item => `
-                            <div class="flex justify-between text-sm mb-1">
-                                <span class="text-gray-300">${item.quantity}x ${item.name}</span>
-                                <span class="font-medium">${formatCurrency(item.price * item.quantity)}</span>
+                            <div style="display: flex; justify-content: space-between;">
+                                <span>${item.quantity}x ${item.name}</span>
+                                <span>${formatCurrency(item.price * item.quantity)}</span>
                             </div>
                         `).join('')}
-                    </div>
-                    <div class="mt-4 pt-4 border-t border-gray-600 flex justify-between items-center">
-                        <span class="text-lg font-bold">Total: ${formatCurrency(pedido.total)}</span>
-                    </div>
-                    <div class="mt-4 flex gap-2 no-print">
-                        <button data-id="${pedido.id}" class="print-btn w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">Imprimir</button>
-                        <button data-id="${pedido.id}" class="status-btn w-full ${isDone ? 'bg-yellow-600 hover:bg-yellow-700' : 'bg-green-600 hover:bg-green-700'} text-white font-bold py-2 px-4 rounded-lg transition-colors">${isDone ? 'Reabrir' : 'Concluir'}</button>
+                        <hr style="border-top: 1px dashed black; margin: 10px 0;">
+                        <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: 1.1em;">
+                            <span>Total:</span>
+                            <span>${formatCurrency(pedido.total)}</span>
+                        </div>
                     </div>
                 `;
-                ordersContainer.appendChild(orderCard);
-            });
-        };
+                printArea.innerHTML = printContent;
+                window.print();
+            };
+            
+            const showDailyReport = () => {
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
 
-        const handlePrint = (pedido) => {
-            const time = new Date(pedido.createdAt.seconds * 1000);
-            let printContent = `
-                <div style="font-family: monospace; padding: 10px;">
-                    <h2 style="text-align: center; font-size: 1.2em; margin-bottom: 10px;">${document.title}</h2>
-                    <p>Pedido: #${pedido.id.substring(0, 5)}</p>
-                    <p>Cliente: <strong>${pedido.customerName}</strong></p>
-                    <p>Senha: <strong>${pedido.password}</strong></p>
-                    <p>Data: ${time.toLocaleDateString('pt-BR')} ${time.toLocaleTimeString('pt-BR')}</p>
-                    <hr style="border-top: 1px dashed black; margin: 10px 0;">
-                    ${pedido.items.map(item => `
-                        <div style="display: flex; justify-content: space-between;">
-                            <span>${item.quantity}x ${item.name}</span>
-                            <span>${formatCurrency(item.price * item.quantity)}</span>
-                        </div>
-                    `).join('')}
-                    <hr style="border-top: 1px dashed black; margin: 10px 0;">
-                    <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: 1.1em;">
-                        <span>Total:</span>
-                        <span>${formatCurrency(pedido.total)}</span>
+                const todaysCompletedOrders = allOrdersCache.filter(order => {
+                    if (!order.createdAt || order.status !== 'concluido') {
+                        return false;
+                    }
+                    const orderDate = new Date(order.createdAt.seconds * 1000);
+                    return orderDate >= today;
+                });
+
+                let totalArrecadado = 0;
+                const itemsVendidos = {};
+
+                todaysCompletedOrders.forEach(order => {
+                    totalArrecadado += order.total;
+                    order.items.forEach(item => {
+                        itemsVendidos[item.name] = (itemsVendidos[item.name] || 0) + item.quantity;
+                    });
+                });
+
+                const reportContentEl = document.getElementById('report-content');
+                let reportHTML = `
+                    <div id="report-to-print">
+                        <h3 class="text-lg font-semibold">Data: ${new Date().toLocaleDateString('pt-BR')}</h3>
+                        <h3 class="text-xl font-bold my-4 text-green-400">Total Arrecadado: ${formatCurrency(totalArrecadado)}</h3>
+                        <h4 class="text-lg font-semibold mt-6 mb-2 border-b border-gray-700 pb-1">Itens Vendidos:</h4>
+                `;
+
+                const sortedItems = Object.keys(itemsVendidos).sort();
+
+                if (sortedItems.length === 0) {
+                    reportHTML += `<p class="text-gray-400">Nenhum pedido concluído hoje.</p>`;
+                } else {
+                    reportHTML += '<ul class="space-y-1 text-gray-300 list-disc list-inside">';
+                    for (const itemName of sortedItems) {
+                        reportHTML += `<li>${itemsVendidos[itemName]}x ${itemName}</li>`;
+                    }
+                    reportHTML += '</ul>';
+                }
+                reportHTML += `</div>`;
+                reportContentEl.innerHTML = reportHTML;
+                openModal(reportModal);
+            };
+            
+            const exportAndPrintReport = () => {
+                const reportContent = document.getElementById('report-to-print').innerHTML;
+                let printContent = `
+                    <div style="font-family: monospace; padding: 10px;">
+                        <h2 style="text-align: center; font-size: 1.2em; margin-bottom: 20px;">Relatório de Caixa</h2>
+                        ${reportContent.replace(/class="[^"]*"/g, '')}
                     </div>
-                </div>
-            `;
-            printArea.innerHTML = printContent;
-            window.print();
-        };
+                `;
+                printArea.innerHTML = printContent;
+                window.print();
+            };
 
-        const updateStatus = async (pedidoId, currentStatus) => {
-            if (!db) return;
-            const newStatus = currentStatus === 'pendente' ? 'concluido' : 'pendente';
-            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-            const orderRef = doc(db, `artifacts/${appId}/public/data/pedidos`, pedidoId);
-            try {
-                await updateDoc(orderRef, { status: newStatus });
-            } catch (error) {
-                console.error("Erro ao atualizar status: ", error);
-            }
-        };
 
-        // Import the functions you need from the SDKs you need
-import { initializeApp } from "firebase/app";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
+            const updateStatus = async (pedidoId, currentStatus) => {
+                if (!db) return;
+                const newStatus = currentStatus === 'pendente' ? 'concluido' : 'pendente';
+                const orderRef = doc(db, 'pedidos', pedidoId);
+                try {
+                    await updateDoc(orderRef, { status: newStatus });
+                } catch (error) {
+                    console.error("Erro ao atualizar status: ", error);
+                }
+            };
+            
+            (async () => {
+                try {
+                    const firebaseConfigStr = typeof __firebase_config !== 'undefined' 
+                        ? __firebase_config 
+                        : JSON.stringify({
+                            apiKey: "AIzaSyAg3rt06y_BmN521KMtPJQLMEp3yIEt0FQ",
+                            authDomain: "enraizadas-95d63.firebaseapp.com",
+                            projectId: "enraizadas-95d63",
+                            storageBucket: "enraizadas-95d63.appspot.com",
+                            messagingSenderId: "93361321737",
+                            appId: "1:93361321737:web:e4aac6bbf90354f58585d8"
+                        });
+                    const firebaseConfig = JSON.parse(firebaseConfigStr);
 
-// Your web app's Firebase configuration
-const firebaseConfig = {
-  apiKey: "AIzaSyAg3rt06y_BmN521KMtPJQLMEp3yIEt0FQ",
-  authDomain: "enraizadas-95d63.firebaseapp.com",
-  projectId: "enraizadas-95d63",
-  storageBucket: "enraizadas-95d63.firebasestorage.app",
-  messagingSenderId: "93361321737",
-  appId: "1:93361321737:web:e4aac6bbf90354f58585d8"
-};
+                    if (!firebaseConfig.apiKey) {
+                        throw new Error("Configuração do Firebase não foi encontrada ou é inválida.");
+                    }
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
+                    const app = initializeApp(firebaseConfig);
+                    db = getFirestore(app);
+                    const auth = getAuth(app);
+                    
+                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                        await signInWithCustomToken(auth, __initial_auth_token);
+                    } else {
+                        await signInAnonymously(auth);
+                    }
+                    console.log("Firebase inicializado e autenticado com sucesso no Painel da Cozinha.");
 
-        document.body.addEventListener('click', (event) => {
-            const target = event.target.closest('button');
-            if (!target) return;
-            const orderId = target.dataset.id;
-            const pedido = allOrdersCache.find(p => p.id === orderId); // Agora encontra o pedido correto
-            if (!pedido) return;
+                    const q = query(collection(db, 'pedidos'));
 
-            if (target.classList.contains('print-btn')) handlePrint(pedido);
-            if (target.classList.contains('status-btn')) updateStatus(orderId, pedido.status);
+                    onSnapshot(q, (querySnapshot) => {
+                        connectionStatus.textContent = "Conectado";
+                        connectionStatus.classList.replace('text-yellow-400', 'text-green-400');
+                        connectionStatus.classList.replace('text-red-400', 'text-green-400');
+                        connectionDot.classList.replace('bg-yellow-500', 'bg-green-500');
+                        connectionDot.classList.replace('bg-red-500', 'bg-green-500');
+                        connectionPing.classList.remove('hidden');
+
+                        let allOrders = [];
+                        querySnapshot.forEach((doc) => {
+                            allOrders.push({ id: doc.id, ...doc.data() });
+                        });
+                        
+                        allOrders.sort((a, b) => {
+                            const statusA = a.status === 'pendente' ? 0 : 1;
+                            const statusB = b.status === 'pendente' ? 0 : 1;
+                            if (statusA !== statusB) return statusA - statusB;
+                            return (b.createdAt?.seconds ?? 0) - (a.createdAt?.seconds ?? 0);
+                        });
+
+                        renderOrders(allOrders);
+
+                    }, (error) => {
+                        console.error("Erro ao buscar pedidos: ", error);
+                        connectionStatus.textContent = "Sem permissão";
+                        connectionStatus.classList.replace('text-green-400', 'text-red-400');
+                        connectionDot.classList.replace('bg-green-500', 'bg-red-500');
+                        connectionPing.classList.add('hidden');
+                        ordersContainer.innerHTML = `<p class="text-red-400 col-span-full text-center">Erro de permissão. Verifique as Regras de Segurança no seu painel do Firebase.</p>`;
+                        loadingOrders.style.display = 'none';
+                    });
+
+                } catch (error) {
+                    console.error("Erro na inicialização do Firebase (Cozinha):", error);
+                    loadingOrders.innerHTML = `<p class="text-red-400">Falha na conexão. Verifique as chaves do Firebase e as regras de segurança.</p>`;
+                }
+            })();
+
+            document.body.addEventListener('click', (event) => {
+                const target = event.target.closest('button');
+                if (!target) return;
+                const orderId = target.dataset.id;
+                const pedido = allOrdersCache.find(p => p.id === orderId);
+                
+                if (target.classList.contains('print-btn') && pedido) handlePrint(pedido);
+                if (target.classList.contains('status-btn') && pedido) updateStatus(orderId, pedido.status);
+            });
+            
+            reportButton.addEventListener('click', showDailyReport);
+            closeReportModalButton.addEventListener('click', () => closeModal(reportModal));
+            exportReportButton.addEventListener('click', exportAndPrintReport);
         });
-
     </script>
 </body>
 </html>
