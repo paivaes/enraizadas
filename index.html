@@ -505,7 +505,7 @@
 
                 } catch (e) {
                     console.error("ERRO DETALHADO AO ADICIONAR PEDIDO: ", e);
-                    orderErrorMessage.textContent = e.message.includes('Estoque insuficiente') ? e.message : "Falha ao enviar. Tente novamente.";
+                    orderErrorMessage.textContent = e.message.includes('Estoque insuficiente') ? e.message : "Falha ao enviar. Verifique as permissões do Firebase.";
                 } finally {
                     submitButton.disabled = false;
                     submitButton.textContent = "Confirmar Pedido";
@@ -695,8 +695,8 @@
                         });
                     const firebaseConfig = JSON.parse(firebaseConfigStr);
 
-                    if (!firebaseConfig.apiKey) {
-                        throw new Error("Configuração do Firebase não foi encontrada ou é inválida.");
+                    if (!firebaseConfig.apiKey || firebaseConfig.apiKey.includes("AIzaSyA")) {
+                         throw new Error("Configuração do Firebase não foi adicionada ou é inválida. Cole sua firebaseConfig.");
                     }
 
                     const app = initializeApp(firebaseConfig);
@@ -751,7 +751,7 @@
                         (async () => {
                            try {
                                await setDoc(configRef, { name: "Lanchonete Sabor Digital" });
-                           } catch(e){ console.error("Erro ao criar config inicial", e)}
+                           } catch(e){ console.error("Erro ao criar config inicial:", e); alert("Falha ao criar configuração inicial. Verifique as permissões no Firebase.")}
                         })();
                     }
                 }, (error) => {
