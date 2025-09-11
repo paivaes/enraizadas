@@ -683,21 +683,14 @@
             // --- INICIALIZAÇÃO FIREBASE (ÚLTIMO PASSO) ---
             (async () => {
                 try {
-                    const firebaseConfigStr = typeof __firebase_config !== 'undefined' 
-                        ? __firebase_config 
-                        : JSON.stringify({
-                            apiKey: "AIzaSyAg3rt06y_BmN521KMtPJQLMEp3yIEt0FQ",
-                            authDomain: "enraizadas-95d63.firebaseapp.com",
-                            projectId: "enraizadas-95d63",
-                            storageBucket: "enraizadas-95d63.appspot.com",
-                            messagingSenderId: "93361321737",
-                            appId: "1:93361321737:web:e4aac6bbf90354f58585d8"
-                        });
-                    const firebaseConfig = JSON.parse(firebaseConfigStr);
-
-                    if (!firebaseConfig.apiKey || firebaseConfig.apiKey.includes("AIzaSyA")) {
-                         throw new Error("Configuração do Firebase não foi adicionada ou é inválida. Cole sua firebaseConfig.");
-                    }
+                    const firebaseConfig = {
+                      apiKey: "AIzaSyAg3rt06y_BmN521KMtPJQLMEp3yIEt0FQ",
+                      authDomain: "enraizadas-95d63.firebaseapp.com",
+                      projectId: "enraizadas-95d63",
+                      storageBucket: "enraizadas-95d63.appspot.com",
+                      messagingSenderId: "93361321737",
+                      appId: "1:93361321737:web:e4aac6bbf90354f58585d8"
+                    };
 
                     const app = initializeApp(firebaseConfig);
                     db = getFirestore(app);
