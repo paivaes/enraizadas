@@ -224,7 +224,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getFirestore, collection, addDoc, serverTimestamp, runTransaction, doc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, serverTimestamp, runTransaction, doc, onSnapshot, query, updateDoc, deleteDoc, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 
         document.addEventListener('DOMContentLoaded', () => {
@@ -273,21 +273,7 @@
             const saveConfigToStorage = () => {
                 localStorage.setItem('lanchoneteConfig', JSON.stringify(lanchoneteConfig));
             };
-
-            const loadMenuFromStorage = () => {
-                const storedMenu = localStorage.getItem('lanchoneteMenu');
-                if (storedMenu) {
-                    menuItems = JSON.parse(storedMenu);
-                } else {
-                    menuItems = [
-                        { id: 1, name: "X-Burger Clássico", description: "Pão, hambúrguer de 150g, queijo, alface, tomate e molho especial.", price: 25.50 },
-                        { id: 2, name: "X-Bacon Supremo", description: "O clássico com fatias generosas de bacon crocante e queijo cheddar.", price: 29.90 },
-                    ];
-                    saveMenuToStorage();
-                }
-            };
             
-            const saveMenuToStorage = () => localStorage.setItem('lanchoneteMenu', JSON.stringify(menuItems));
             const formatCurrency = (value) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
             const renderLanchoneteName = () => lanchoneteNameElement.textContent = lanchoneteConfig.name;
 
@@ -402,11 +388,13 @@
             };
 
             const addToCart = (itemId) => {
+                const itemData = menuItems.find(item => item.id === itemId);
+                if (!itemData) return;
                 const existingItem = cart.find(item => item.id === itemId);
-                if (existingItem) existingItem.quantity++;
-                else {
-                    const itemToAdd = menuItems.find(item => item.id === itemId);
-                    if(itemToAdd) cart.push({ ...itemToAdd, quantity: 1 });
+                if (existingItem) {
+                    existingItem.quantity++;
+                } else {
+                    cart.push({ ...itemData, quantity: 1 });
                 }
                 renderCart();
             };
@@ -460,8 +448,7 @@
                         createdAt: serverTimestamp()
                     };
                     
-                    const docRef = await addDoc(collection(db, 'pedidos'), order);
-                    console.log("Pedido salvo com sucesso! Documento ID: ", docRef.id);
+                    await addDoc(collection(db, 'pedidos'), order);
 
                     orderPasswordElement.textContent = newPassword;
                     closeModal(customerNameModal);
@@ -491,15 +478,20 @@
                 }
             };
             
-            const handleDeleteItem = (itemId) => {
-                menuItems = menuItems.filter(item => item.id !== itemId);
-                saveMenuToStorage();
-                rerenderAll();
+            const handleDeleteItem = async (itemId) => {
+                if (!db) return alert("Erro de conexão.");
+                try {
+                    await deleteDoc(doc(db, "cardapio", itemId));
+                } catch (error) {
+                    console.error("Erro ao apagar item: ", error);
+                    alert("Falha ao apagar item.");
+                }
             };
 
             const resetForm = () => {
                 menuItemForm.reset();
                 editingItemId = null;
+                document.getElementById('item-id').value = '';
                 formTitle.textContent = "Adicionar Novo Item";
                 cancelEditBtn.classList.add('hidden');
             }
@@ -526,7 +518,7 @@
                     }
                     return;
                 }
-                const itemId = parseInt(target.dataset.id);
+                const itemId = target.dataset.id;
                 if (target.classList.contains('add-to-cart-btn')) addToCart(itemId);
                 if (target.classList.contains('increase-quantity-btn')) updateQuantity(itemId, 1);
                 if (target.classList.contains('decrease-quantity-btn')) updateQuantity(itemId, -1);
@@ -601,29 +593,32 @@
                 }
             });
 
-            menuItemForm.addEventListener('submit', (e) => {
+            menuItemForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
+                if (!db) return alert("Erro de conexão.");
+
                 const formData = {
-                    id: editingItemId || Date.now(),
                     name: document.getElementById('item-name').value,
                     description: document.getElementById('item-description').value,
                     price: parseFloat(document.getElementById('item-price').value),
                 };
-                if (editingItemId) {
-                    const index = menuItems.findIndex(item => item.id === editingItemId);
-                    if (index > -1) menuItems[index] = formData;
-                } else {
-                    menuItems.push(formData);
+
+                try {
+                    if (editingItemId) {
+                        await updateDoc(doc(db, "cardapio", editingItemId), formData);
+                    } else {
+                        await addDoc(collection(db, "cardapio"), formData);
+                    }
+                    resetForm();
+                } catch (error) {
+                    console.error("Erro ao salvar item:", error);
+                    alert("Falha ao salvar o item.");
                 }
-                saveMenuToStorage();
-                rerenderAll();
-                resetForm();
             });
 
             // --- INICIALIZAÇÃO DA APLICAÇÃO (UI) ---
             loadConfigFromStorage();
-            loadMenuFromStorage();
-            rerenderAll();
+            rerenderAll(); // Renderiza com dados locais primeiro
 
             // --- INICIALIZAÇÃO FIREBASE (ÚLTIMO PASSO) ---
             (async () => {
@@ -655,6 +650,7 @@
                     }
                     
                     console.log("Firebase inicializado e autenticado com sucesso.");
+                    listenToMenu(); // Inicia o listener do cardápio
 
                 } catch (error) {
                     console.error("Erro ao inicializar o Firebase.", error);
@@ -666,6 +662,22 @@
                     }
                 }
             })();
+
+            const listenToMenu = () => {
+                if (!db) return;
+                const q = query(collection(db, 'cardapio'));
+                onSnapshot(q, (snapshot) => {
+                    const tempMenu = [];
+                    snapshot.forEach((doc) => {
+                        tempMenu.push({ id: doc.id, ...doc.data() });
+                    });
+                    menuItems = tempMenu;
+                    rerenderAll();
+                }, (error) => {
+                    console.error("Erro ao buscar cardápio em tempo real: ", error);
+                });
+            };
+
         });
     </script>
 </body>
