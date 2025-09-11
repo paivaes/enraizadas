@@ -228,7 +228,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getFirestore, collection, addDoc, serverTimestamp, runTransaction, doc, onSnapshot, query, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, serverTimestamp, runTransaction, doc, onSnapshot, query, updateDoc, deleteDoc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 
         document.addEventListener('DOMContentLoaded', () => {
@@ -269,15 +269,6 @@
             const orderErrorMessage = document.getElementById('order-error-message');
 
             // --- FUNÇÕES ---
-            const loadConfigFromStorage = () => {
-                const storedConfig = localStorage.getItem('lanchoneteConfig');
-                if (storedConfig) lanchoneteConfig = JSON.parse(storedConfig);
-            };
-
-            const saveConfigToStorage = () => {
-                localStorage.setItem('lanchoneteConfig', JSON.stringify(lanchoneteConfig));
-            };
-            
             const formatCurrency = (value) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
             const renderLanchoneteName = () => lanchoneteNameElement.textContent = lanchoneteConfig.name;
 
@@ -638,17 +629,27 @@
 
             cancelEditBtn.addEventListener('click', resetForm);
 
-            configForm.addEventListener('submit', (e) => {
+            configForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
+                if (!db) return alert("Erro de conexão.");
+
                 const newName = configNameInput.value.trim();
                 if (newName) {
-                    lanchoneteConfig.name = newName;
-                    saveConfigToStorage();
-                    renderLanchoneteName();
-                    const submitButton = configForm.querySelector('button[type="submit"]');
-                    const originalText = submitButton.textContent;
-                    submitButton.textContent = 'Salvo!';
-                    setTimeout(() => submitButton.textContent = originalText, 1500);
+                     const submitButton = configForm.querySelector('button[type="submit"]');
+                    submitButton.disabled = true;
+                    try {
+                        await setDoc(doc(db, "config", "lanchonete"), { name: newName });
+                        const originalText = submitButton.textContent;
+                        submitButton.textContent = 'Salvo!';
+                        setTimeout(() => {
+                           submitButton.textContent = originalText;
+                           submitButton.disabled = false;
+                        }, 1500);
+                    } catch (error) {
+                        console.error("Erro ao salvar nome:", error);
+                        alert("Falha ao salvar nome.");
+                        submitButton.disabled = false;
+                    }
                 }
             });
 
@@ -677,7 +678,6 @@
             });
 
             // --- INICIALIZAÇÃO DA APLICAÇÃO (UI) ---
-            loadConfigFromStorage();
             renderLanchoneteName();
 
             // --- INICIALIZAÇÃO FIREBASE (ÚLTIMO PASSO) ---
@@ -710,7 +710,8 @@
                     }
                     
                     console.log("Firebase inicializado e autenticado com sucesso.");
-                    listenToMenu(); // Inicia o listener do cardápio
+                    listenToMenu(); 
+                    listenToConfig();
 
                 } catch (error) {
                     console.error("Erro ao inicializar o Firebase.", error);
@@ -735,6 +736,23 @@
                     rerenderAll();
                 }, (error) => {
                     console.error("Erro ao buscar cardápio em tempo real: ", error);
+                });
+            };
+
+            const listenToConfig = () => {
+                if (!db) return;
+                const configRef = doc(db, 'config', 'lanchonete');
+                onSnapshot(configRef, (docSnap) => {
+                    if (docSnap.exists()) {
+                        lanchoneteConfig = docSnap.data();
+                        renderLanchoneteName();
+                    } else {
+                        (async () => {
+                           try {
+                               await setDoc(configRef, { name: "Lanchonete Sabor Digital" });
+                           } catch(e){ console.error("Erro ao criar config inicial", e)}
+                        })();
+                    }
                 });
             };
 
