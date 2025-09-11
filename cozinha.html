@@ -31,22 +31,10 @@
         }
 
         @media print {
-            body * {
-                visibility: hidden;
-            }
-            #print-area, #print-area * {
-                visibility: visible;
-            }
-            #print-area {
-                position: absolute;
-                left: 0;
-                top: 0;
-                width: 100%;
-                color: black !important;
-            }
-            .no-print {
-                display: none;
-            }
+            body * { visibility: hidden; }
+            .print-area, .print-area * { visibility: visible; }
+            .print-area { position: absolute; left: 0; top: 0; width: 100%; color: black !important; }
+            .no-print { display: none; }
         }
     </style>
 </head>
@@ -95,7 +83,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getFirestore, collection, onSnapshot, query, doc, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, collection, onSnapshot, query, doc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 
         document.addEventListener('DOMContentLoaded', () => {
@@ -173,9 +161,10 @@
                         <div class="mt-4 pt-4 border-t border-gray-600 flex justify-between items-center">
                             <span class="text-lg font-bold">Total: ${formatCurrency(pedido.total)}</span>
                         </div>
-                        <div class="mt-4 flex gap-2 no-print">
-                            <button data-id="${pedido.id}" class="print-btn w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">Imprimir</button>
-                            <button data-id="${pedido.id}" class="status-btn w-full ${isDone ? 'bg-yellow-600 hover:bg-yellow-700' : 'bg-green-600 hover:bg-green-700'} text-white font-bold py-2 px-4 rounded-lg transition-colors">${isDone ? 'Reabrir' : 'Concluir'}</button>
+                        <div class="mt-4 grid grid-cols-3 gap-2 no-print">
+                            <button data-id="${pedido.id}" class="print-btn col-span-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-2 rounded-lg transition-colors">Imprimir</button>
+                            <button data-id="${pedido.id}" class="status-btn col-span-1 ${isDone ? 'bg-yellow-600 hover:bg-yellow-700' : 'bg-green-600 hover:bg-green-700'} text-white font-bold py-2 px-2 rounded-lg transition-colors">${isDone ? 'Reabrir' : 'Concluir'}</button>
+                            <button data-id="${pedido.id}" class="delete-btn col-span-1 bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-2 rounded-lg transition-colors">Excluir</button>
                         </div>
                     `;
                     ordersContainer.appendChild(orderCard);
@@ -293,6 +282,18 @@
                 }
             };
             
+            const deleteOrder = async (pedidoId) => {
+                if (!db) return;
+                if (confirm('Tem certeza que deseja excluir este pedido permanentemente?')) {
+                    try {
+                        await deleteDoc(doc(db, "pedidos", pedidoId));
+                    } catch (error) {
+                        console.error("Erro ao excluir pedido: ", error);
+                        alert("Não foi possível excluir o pedido.");
+                    }
+                }
+            };
+
             (async () => {
                 try {
                     const firebaseConfigStr = typeof __firebase_config !== 'undefined' 
@@ -366,10 +367,18 @@
                 const target = event.target.closest('button');
                 if (!target) return;
                 const orderId = target.dataset.id;
-                const pedido = allOrdersCache.find(p => p.id === orderId);
                 
-                if (target.classList.contains('print-btn') && pedido) handlePrint(pedido);
-                if (target.classList.contains('status-btn') && pedido) updateStatus(orderId, pedido.status);
+                if (target.classList.contains('print-btn')) {
+                    const pedido = allOrdersCache.find(p => p.id === orderId);
+                    if (pedido) handlePrint(pedido);
+                }
+                if (target.classList.contains('status-btn')) {
+                     const pedido = allOrdersCache.find(p => p.id === orderId);
+                    if (pedido) updateStatus(orderId, pedido.status);
+                }
+                if (target.classList.contains('delete-btn')) {
+                    deleteOrder(orderId);
+                }
             });
             
             reportButton.addEventListener('click', showDailyReport);
