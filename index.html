@@ -207,6 +207,10 @@
                             <label for="item-price" class="block text-sm font-medium text-gray-300">Preço (ex: 25.50)</label>
                             <input type="number" step="0.01" id="item-price" required class="mt-1 block w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
                         </div>
+                        <div>
+                            <label for="item-stock" class="block text-sm font-medium text-gray-300">Estoque</label>
+                            <input type="number" id="item-stock" required class="mt-1 block w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                        </div>
                         <div class="flex gap-2">
                              <button type="submit" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">Salvar Item</button>
                              <button type="button" id="cancel-edit-btn" class="w-full bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg transition-colors hidden">Cancelar</button>
@@ -224,7 +228,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getFirestore, collection, addDoc, serverTimestamp, runTransaction, doc, onSnapshot, query, updateDoc, deleteDoc, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, serverTimestamp, runTransaction, doc, onSnapshot, query, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 
         document.addEventListener('DOMContentLoaded', () => {
@@ -287,19 +291,28 @@
             const renderMenuItems = () => {
                 menuContainer.innerHTML = '';
                 if(menuItems.length === 0) {
-                    menuContainer.innerHTML = `<p class="text-gray-400 col-span-full text-center">Cardápio vazio. Adicione itens no painel.</p>`;
+                    menuContainer.innerHTML = `<p class="text-gray-400 col-span-full text-center">Carregando cardápio...</p>`;
                     return;
                 }
                 menuItems.forEach(item => {
                     const menuItemElement = document.createElement('div');
                     menuItemElement.className = 'bg-gray-800 rounded-xl shadow-lg transform hover:-translate-y-1 transition-transform duration-300 flex flex-col p-4';
+                    
+                    const stock = item.stock ?? 0;
+                    const isAvailable = stock > 0;
+
                     menuItemElement.innerHTML = `
                         <div class="flex flex-col flex-grow">
                             <h3 class="text-xl font-bold mb-2">${item.name}</h3>
                             <p class="text-gray-400 text-sm mb-4 flex-grow">${item.description}</p>
+                             <p class="text-sm mb-2 ${stock > 5 ? 'text-gray-400' : 'text-yellow-400'}">
+                                ${isAvailable ? `${stock} em estoque` : 'Esgotado'}
+                            </p>
                             <div class="flex justify-between items-center mt-auto">
                                 <span class="text-2xl font-bold text-green-400">${formatCurrency(item.price)}</span>
-                                <button data-id="${item.id}" class="add-to-cart-btn bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors">Adicionar</button>
+                                <button data-id="${item.id}" class="add-to-cart-btn bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors ${!isAvailable ? 'opacity-50 cursor-not-allowed' : ''}" ${!isAvailable ? 'disabled' : ''}>
+                                    ${isAvailable ? 'Adicionar' : 'Esgotado'}
+                                </button>
                             </div>
                         </div>`;
                     menuContainer.appendChild(menuItemElement);
@@ -348,6 +361,7 @@
                     itemElement.innerHTML = `
                         <div>
                             <p class="font-semibold">${item.name}</p>
+                            <p class="text-sm text-gray-400">Estoque: ${item.stock ?? 0}</p>
                             <p class="text-sm text-green-400">${formatCurrency(item.price)}</p>
                         </div>
                         <div class="flex gap-2">
@@ -389,10 +403,18 @@
 
             const addToCart = (itemId) => {
                 const itemData = menuItems.find(item => item.id === itemId);
-                if (!itemData) return;
-                const existingItem = cart.find(item => item.id === itemId);
-                if (existingItem) {
-                    existingItem.quantity++;
+                if (!itemData || (itemData.stock ?? 0) <= 0) return;
+
+                const existingItemInCart = cart.find(item => item.id === itemId);
+                const quantityInCart = existingItemInCart ? existingItemInCart.quantity : 0;
+
+                if (quantityInCart >= itemData.stock) {
+                    alert('Quantidade máxima em estoque atingida.');
+                    return;
+                }
+
+                if (existingItemInCart) {
+                    existingItemInCart.quantity++;
                 } else {
                     cart.push({ ...itemData, quantity: 1 });
                 }
@@ -401,10 +423,19 @@
 
             const updateQuantity = (itemId, change) => {
                 const cartItem = cart.find(item => item.id === itemId);
-                if (cartItem) {
-                    cartItem.quantity += change;
-                    if (cartItem.quantity <= 0) cart = cart.filter(item => item.id !== itemId);
+                if (!cartItem) return;
+
+                if (change > 0) {
+                    const itemData = menuItems.find(item => item.id === itemId);
+                    if (cartItem.quantity >= (itemData.stock ?? 0)) {
+                         alert('Quantidade máxima em estoque atingida.');
+                        return;
+                    }
                 }
+
+                cartItem.quantity += change;
+                if (cartItem.quantity <= 0) cart = cart.filter(item => item.id !== itemId);
+                
                 renderCart();
             };
 
@@ -416,7 +447,6 @@
             const submitOrder = async (customerName) => {
                 if (!db) {
                     orderErrorMessage.textContent = "Erro de conexão. Tente novamente.";
-                    console.error("A variável 'db' do Firestore não está inicializada.");
                     return;
                 }
 
@@ -425,32 +455,58 @@
                 submitButton.textContent = "Enviando...";
                 orderErrorMessage.textContent = '';
 
+                let finalPassword;
+
                 try {
-                    const counterRef = doc(db, 'counters', 'orderCounter');
-                    
-                    const newPassword = await runTransaction(db, async (transaction) => {
-                        const counterDoc = await transaction.get(counterRef);
-                        if (!counterDoc.exists()) {
-                            transaction.set(counterRef, { currentNumber: 1 });
-                            return 1;
+                    await runTransaction(db, async (transaction) => {
+                        const itemsToUpdate = [];
+                        const insufficientStockItems = [];
+
+                        for (const cartItem of cart) {
+                            const itemRef = doc(db, 'cardapio', cartItem.id);
+                            const itemDoc = await transaction.get(itemRef);
+
+                            if (!itemDoc.exists()) throw new Error(`Item ${cartItem.name} não encontrado.`);
+                            
+                            const currentStock = itemDoc.data().stock ?? 0;
+                            if (currentStock < cartItem.quantity) {
+                                insufficientStockItems.push(cartItem.name);
+                            }
+                            
+                            itemsToUpdate.push({ ref: itemRef, newStock: currentStock - cartItem.quantity });
                         }
-                        const newNumber = counterDoc.data().currentNumber + 1;
-                        transaction.update(counterRef, { currentNumber: newNumber });
-                        return newNumber;
+
+                        if (insufficientStockItems.length > 0) {
+                            throw new Error(`Estoque insuficiente para: ${insufficientStockItems.join(', ')}.`);
+                        }
+
+                        itemsToUpdate.forEach(item => transaction.update(item.ref, { stock: item.newStock }));
+
+                        const counterRef = doc(db, 'counters', 'orderCounter');
+                        const counterDoc = await transaction.get(counterRef);
+                        let newPassword = 1;
+                        if (counterDoc.exists()) {
+                            newPassword = counterDoc.data().currentNumber + 1;
+                            transaction.update(counterRef, { currentNumber: newPassword });
+                        } else {
+                            transaction.set(counterRef, { currentNumber: 1 });
+                        }
+                        finalPassword = newPassword;
+
+                        const order = {
+                            customerName: customerName,
+                            password: newPassword,
+                            items: cart,
+                            total: cart.reduce((sum, item) => sum + item.price * item.quantity, 0),
+                            status: 'pendente',
+                            createdAt: serverTimestamp()
+                        };
+                        
+                        const orderRef = doc(collection(db, 'pedidos'));
+                        transaction.set(orderRef, order);
                     });
 
-                    const order = {
-                        customerName: customerName,
-                        password: newPassword,
-                        items: cart,
-                        total: cart.reduce((sum, item) => sum + item.price * item.quantity, 0),
-                        status: 'pendente',
-                        createdAt: serverTimestamp()
-                    };
-                    
-                    await addDoc(collection(db, 'pedidos'), order);
-
-                    orderPasswordElement.textContent = newPassword;
+                    orderPasswordElement.textContent = finalPassword;
                     closeModal(customerNameModal);
                     openModal(orderModal);
                     cart = [];
@@ -458,7 +514,7 @@
 
                 } catch (e) {
                     console.error("ERRO DETALHADO AO ADICIONAR PEDIDO: ", e);
-                    orderErrorMessage.textContent = "Falha ao enviar. Tente novamente.";
+                    orderErrorMessage.textContent = e.message.includes('Estoque insuficiente') ? e.message : "Falha ao enviar. Tente novamente.";
                 } finally {
                     submitButton.disabled = false;
                     submitButton.textContent = "Confirmar Pedido";
@@ -473,6 +529,7 @@
                     document.getElementById('item-name').value = item.name;
                     document.getElementById('item-description').value = item.description;
                     document.getElementById('item-price').value = item.price;
+                    document.getElementById('item-stock').value = item.stock ?? 0;
                     formTitle.textContent = "Editar Item";
                     cancelEditBtn.classList.remove('hidden');
                 }
@@ -480,11 +537,13 @@
             
             const handleDeleteItem = async (itemId) => {
                 if (!db) return alert("Erro de conexão.");
-                try {
-                    await deleteDoc(doc(db, "cardapio", itemId));
-                } catch (error) {
-                    console.error("Erro ao apagar item: ", error);
-                    alert("Falha ao apagar item.");
+                if (confirm('Tem certeza que deseja apagar este item do cardápio?')) {
+                    try {
+                        await deleteDoc(doc(db, "cardapio", itemId));
+                    } catch (error) {
+                        console.error("Erro ao apagar item: ", error);
+                        alert("Falha ao apagar item.");
+                    }
                 }
             };
 
@@ -601,6 +660,7 @@
                     name: document.getElementById('item-name').value,
                     description: document.getElementById('item-description').value,
                     price: parseFloat(document.getElementById('item-price').value),
+                    stock: parseInt(document.getElementById('item-stock').value)
                 };
 
                 try {
@@ -618,7 +678,7 @@
 
             // --- INICIALIZAÇÃO DA APLICAÇÃO (UI) ---
             loadConfigFromStorage();
-            rerenderAll(); // Renderiza com dados locais primeiro
+            renderLanchoneteName();
 
             // --- INICIALIZAÇÃO FIREBASE (ÚLTIMO PASSO) ---
             (async () => {
