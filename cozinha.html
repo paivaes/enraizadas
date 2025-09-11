@@ -31,10 +31,22 @@
         }
 
         @media print {
-            body * { visibility: hidden; }
-            .print-area, .print-area * { visibility: visible; }
-            .print-area { position: absolute; left: 0; top: 0; width: 100%; color: black !important; }
-            .no-print { display: none; }
+            body * {
+                visibility: hidden;
+            }
+            #print-area, #print-area * {
+                visibility: visible;
+            }
+            #print-area {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+                color: black !important;
+            }
+            .no-print {
+                display: none;
+            }
         }
     </style>
 </head>
@@ -194,6 +206,13 @@
                     </div>
                 `;
                 printArea.innerHTML = printContent;
+                printArea.classList.remove('hidden');
+
+                window.onafterprint = () => {
+                    printArea.classList.add('hidden');
+                    window.onafterprint = null;
+                };
+
                 window.print();
             };
             
@@ -252,6 +271,13 @@
                     </div>
                 `;
                 printArea.innerHTML = printContent;
+                printArea.classList.remove('hidden');
+                
+                window.onafterprint = () => {
+                    printArea.classList.add('hidden');
+                    window.onafterprint = null;
+                };
+
                 window.print();
             };
 
