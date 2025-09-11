@@ -145,56 +145,23 @@
             }
         };
 
-        (async () => {
-            try {
-                const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
-                const app = initializeApp(firebaseConfig);
-                db = getFirestore(app);
-                const auth = getAuth(app);
+        // Import the functions you need from the SDKs you need
+import { initializeApp } from "firebase/app";
+// TODO: Add SDKs for Firebase products that you want to use
+// https://firebase.google.com/docs/web/setup#available-libraries
 
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    await signInWithCustomToken(auth, __initial_auth_token);
-                } else {
-                    await signInAnonymously(auth);
-                }
+// Your web app's Firebase configuration
+const firebaseConfig = {
+  apiKey: "AIzaSyAg3rt06y_BmN521KMtPJQLMEp3yIEt0FQ",
+  authDomain: "enraizadas-95d63.firebaseapp.com",
+  projectId: "enraizadas-95d63",
+  storageBucket: "enraizadas-95d63.firebasestorage.app",
+  messagingSenderId: "93361321737",
+  appId: "1:93361321737:web:e4aac6bbf90354f58585d8"
+};
 
-                console.log("Firebase inicializado e autenticado.");
-                const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-                const q = query(collection(db, `artifacts/${appId}/public/data/pedidos`));
-
-                onSnapshot(q, (querySnapshot) => {
-                    connectionStatus.textContent = "Conectado";
-                    connectionStatus.classList.replace('text-yellow-400', 'text-green-400');
-                    connectionDot.classList.replace('bg-yellow-500', 'bg-green-500');
-                    connectionPing.classList.remove('hidden');
-
-                    let allOrders = [];
-                    querySnapshot.forEach((doc) => {
-                        allOrders.push({ id: doc.id, ...doc.data() });
-                    });
-                    
-                    allOrders.sort((a, b) => {
-                        const statusA = a.status === 'pendente' ? 0 : 1;
-                        const statusB = b.status === 'pendente' ? 0 : 1;
-                        if (statusA !== statusB) return statusA - statusB;
-                        return (b.createdAt?.seconds ?? 0) - (a.createdAt?.seconds ?? 0);
-                    });
-                    
-                    allOrdersCache = allOrders; // CORREÇÃO: Atualiza o cache com os pedidos mais recentes
-                    renderOrders(allOrders);
-
-                }, (error) => {
-                    console.error("Erro ao buscar pedidos: ", error);
-                    connectionStatus.textContent = "Reconectando...";
-                    connectionStatus.classList.replace('text-green-400', 'text-yellow-400');
-                    connectionDot.classList.replace('bg-green-500', 'bg-yellow-500');
-                    connectionPing.classList.add('hidden');
-                });
-            } catch (error) {
-                console.error("Erro na inicialização: ", error);
-                loadingOrders.innerHTML = `<p class="text-red-400">Falha ao conectar com o banco de dados.</p>`;
-            }
-        })();
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
 
         document.body.addEventListener('click', (event) => {
             const target = event.target.closest('button');
