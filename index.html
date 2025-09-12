@@ -238,6 +238,7 @@
             let cart = [];
             let editingItemId = null;
             let lanchoneteConfig = { name: "Lanchonete Sabor Digital" };
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
             // --- SELEÇÃO DE ELEMENTOS DO DOM ---
             const lanchoneteNameElement = document.getElementById('lanchonete-name');
@@ -447,16 +448,18 @@
                 orderErrorMessage.textContent = '';
 
                 let finalPassword;
-                const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
                 try {
                     await runTransaction(db, async (transaction) => {
                         const itemsToUpdate = [];
                         const insufficientStockItems = [];
 
-                        for (const cartItem of cart) {
-                            const itemRef = doc(db, `artifacts/${appId}/public/data/cardapio`, cartItem.id);
-                            const itemDoc = await transaction.get(itemRef);
+                        const itemRefs = cart.map(cartItem => doc(db, `artifacts/${appId}/public/data/cardapio`, cartItem.id));
+                        const itemDocs = await Promise.all(itemRefs.map(ref => transaction.get(ref)));
+                        
+                        for (let i = 0; i < cart.length; i++) {
+                            const cartItem = cart[i];
+                            const itemDoc = itemDocs[i];
 
                             if (!itemDoc.exists()) throw new Error(`Item ${cartItem.name} não encontrado.`);
                             
@@ -465,15 +468,13 @@
                                 insufficientStockItems.push(cartItem.name);
                             }
                             
-                            itemsToUpdate.push({ ref: itemRef, newStock: currentStock - cartItem.quantity });
+                            itemsToUpdate.push({ ref: itemDoc.ref, newStock: currentStock - cartItem.quantity });
                         }
 
                         if (insufficientStockItems.length > 0) {
                             throw new Error(`Estoque insuficiente para: ${insufficientStockItems.join(', ')}.`);
                         }
-
-                        itemsToUpdate.forEach(item => transaction.update(item.ref, { stock: item.newStock }));
-
+                        
                         const counterRef = doc(db, `artifacts/${appId}/public/data/counters`, 'orderCounter');
                         const counterDoc = await transaction.get(counterRef);
                         let newPassword = 1;
@@ -484,6 +485,8 @@
                             transaction.set(counterRef, { currentNumber: 1 });
                         }
                         finalPassword = newPassword;
+                        
+                        itemsToUpdate.forEach(item => transaction.update(item.ref, { stock: item.newStock }));
 
                         const order = {
                             customerName: customerName,
