@@ -121,6 +121,7 @@
             let db;
             let allOrdersCache = [];
             let orderIdToDelete = null;
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
             const ordersContainer = document.getElementById('orders-container');
             const loadingOrders = document.getElementById('loading-orders');
             const printArea = document.getElementById('print-area');
@@ -318,7 +319,7 @@
             const updateStatus = async (pedidoId, currentStatus) => {
                 if (!db) return;
                 const newStatus = currentStatus === 'pendente' ? 'concluido' : 'pendente';
-                const orderRef = doc(db, 'pedidos', pedidoId);
+                const orderRef = doc(db, `artifacts/${appId}/public/data/pedidos`, pedidoId);
                 try {
                     await updateDoc(orderRef, { status: newStatus });
                 } catch (error) {
@@ -334,7 +335,7 @@
             const executeDeleteOrder = async () => {
                 if (!db || !orderIdToDelete) return;
                 try {
-                    await deleteDoc(doc(db, "pedidos", orderIdToDelete));
+                    await deleteDoc(doc(db, `artifacts/${appId}/public/data/pedidos`, orderIdToDelete));
                 } catch (error) {
                     console.error("Erro ao excluir pedido: ", error);
                     alert("Não foi possível excluir o pedido.");
@@ -372,7 +373,7 @@
                     }
                     console.log("Firebase inicializado e autenticado com sucesso no Painel da Cozinha.");
 
-                    const q = query(collection(db, 'pedidos'));
+                    const q = query(collection(db, `artifacts/${appId}/public/data/pedidos`));
 
                     onSnapshot(q, (querySnapshot) => {
                         connectionStatus.textContent = "Conectado";
