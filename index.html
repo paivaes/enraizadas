@@ -447,6 +447,7 @@
                 orderErrorMessage.textContent = '';
 
                 let finalPassword;
+                const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
                 try {
                     await runTransaction(db, async (transaction) => {
@@ -454,7 +455,7 @@
                         const insufficientStockItems = [];
 
                         for (const cartItem of cart) {
-                            const itemRef = doc(db, 'cardapio', cartItem.id);
+                            const itemRef = doc(db, `artifacts/${appId}/public/data/cardapio`, cartItem.id);
                             const itemDoc = await transaction.get(itemRef);
 
                             if (!itemDoc.exists()) throw new Error(`Item ${cartItem.name} não encontrado.`);
@@ -473,7 +474,7 @@
 
                         itemsToUpdate.forEach(item => transaction.update(item.ref, { stock: item.newStock }));
 
-                        const counterRef = doc(db, 'counters', 'orderCounter');
+                        const counterRef = doc(db, `artifacts/${appId}/public/data/counters`, 'orderCounter');
                         const counterDoc = await transaction.get(counterRef);
                         let newPassword = 1;
                         if (counterDoc.exists()) {
@@ -493,7 +494,7 @@
                             createdAt: serverTimestamp()
                         };
                         
-                        const orderRef = doc(collection(db, 'pedidos'));
+                        const orderRef = doc(collection(db, `artifacts/${appId}/public/data/pedidos`));
                         transaction.set(orderRef, order);
                     });
 
@@ -529,8 +530,9 @@
             const handleDeleteItem = async (itemId) => {
                 if (!db) return alert("Erro de conexão.");
                 if (confirm('Tem certeza que deseja apagar este item do cardápio?')) {
+                    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
                     try {
-                        await deleteDoc(doc(db, "cardapio", itemId));
+                        await deleteDoc(doc(db, `artifacts/${appId}/public/data/cardapio`, itemId));
                     } catch (error) {
                         console.error("Erro ao apagar item: ", error);
                         alert("Falha ao apagar item. Verifique as permissões no Firebase.");
@@ -632,13 +634,14 @@
             configForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
                 if (!db) return alert("Erro de conexão.");
+                const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
                 const newName = configNameInput.value.trim();
                 if (newName) {
                      const submitButton = configForm.querySelector('button[type="submit"]');
                     submitButton.disabled = true;
                     try {
-                        await setDoc(doc(db, "config", "lanchonete"), { name: newName });
+                        await setDoc(doc(db, `artifacts/${appId}/public/data/config`, "lanchonete"), { name: newName });
                         const originalText = submitButton.textContent;
                         submitButton.textContent = 'Salvo!';
                         setTimeout(() => {
@@ -656,6 +659,7 @@
             menuItemForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
                 if (!db) return alert("Erro de conexão.");
+                const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
                 const formData = {
                     name: document.getElementById('item-name').value,
@@ -666,9 +670,9 @@
 
                 try {
                     if (editingItemId) {
-                        await updateDoc(doc(db, "cardapio", editingItemId), formData);
+                        await updateDoc(doc(db, `artifacts/${appId}/public/data/cardapio`, editingItemId), formData);
                     } else {
-                        await addDoc(collection(db, "cardapio"), formData);
+                        await addDoc(collection(db, `artifacts/${appId}/public/data/cardapio`), formData);
                     }
                     resetForm();
                 } catch (error) {
@@ -683,14 +687,21 @@
             // --- INICIALIZAÇÃO FIREBASE (ÚLTIMO PASSO) ---
             (async () => {
                 try {
-                    const firebaseConfig = {
-                      apiKey: "AIzaSyAg3rt06y_BmN521KMtPJQLMEp3yIEt0FQ",
-                      authDomain: "enraizadas-95d63.firebaseapp.com",
-                      projectId: "enraizadas-95d63",
-                      storageBucket: "enraizadas-95d63.appspot.com",
-                      messagingSenderId: "93361321737",
-                      appId: "1:93361321737:web:e4aac6bbf90354f58585d8"
-                    };
+                    const firebaseConfigStr = typeof __firebase_config !== 'undefined' 
+                        ? __firebase_config 
+                        : JSON.stringify({
+                            apiKey: "AIzaSyAg3rt06y_BmN521KMtPJQLMEp3yIEt0FQ",
+                            authDomain: "enraizadas-95d63.firebaseapp.com",
+                            projectId: "enraizadas-95d63",
+                            storageBucket: "enraizadas-95d63.appspot.com",
+                            messagingSenderId: "93361321737",
+                            appId: "1:93361321737:web:e4aac6bbf90354f58585d8"
+                        });
+                    const firebaseConfig = JSON.parse(firebaseConfigStr);
+
+                    if (!firebaseConfig.apiKey) {
+                        throw new Error("Configuração do Firebase não foi encontrada ou é inválida.");
+                    }
 
                     const app = initializeApp(firebaseConfig);
                     db = getFirestore(app);
@@ -719,7 +730,8 @@
 
             const listenToMenu = () => {
                 if (!db) return;
-                const q = query(collection(db, 'cardapio'));
+                const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+                const q = query(collection(db, `artifacts/${appId}/public/data/cardapio`));
                 onSnapshot(q, (snapshot) => {
                     const tempMenu = [];
                     snapshot.forEach((doc) => {
@@ -735,7 +747,8 @@
 
             const listenToConfig = () => {
                 if (!db) return;
-                const configRef = doc(db, 'config', 'lanchonete');
+                const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+                const configRef = doc(db, `artifacts/${appId}/public/data/config`, 'lanchonete');
                 onSnapshot(configRef, (docSnap) => {
                     if (docSnap.exists()) {
                         lanchoneteConfig = docSnap.data();
