@@ -345,15 +345,22 @@
 
             (async () => {
                 try {
-                    const firebaseConfig = {
-                      apiKey: "AIzaSyAg3rt06y_BmN521KMtPJQLMEp3yIEt0FQ",
-                      authDomain: "enraizadas-95d63.firebaseapp.com",
-                      projectId: "enraizadas-95d63",
-                      storageBucket: "enraizadas-95d63.appspot.com",
-                      messagingSenderId: "93361321737",
-                      appId: "1:93361321737:web:e4aac6bbf90354f58585d8"
-                    };
-                    
+                    const firebaseConfigStr = typeof __firebase_config !== 'undefined' 
+                        ? __firebase_config 
+                        : JSON.stringify({
+                            apiKey: "AIzaSyAg3rt06y_BmN521KMtPJQLMEp3yIEt0FQ",
+                            authDomain: "enraizadas-95d63.firebaseapp.com",
+                            projectId: "enraizadas-95d63",
+                            storageBucket: "enraizadas-95d63.appspot.com",
+                            messagingSenderId: "93361321737",
+                            appId: "1:93361321737:web:e4aac6bbf90354f58585d8"
+                        });
+                    const firebaseConfig = JSON.parse(firebaseConfigStr);
+
+                    if (!firebaseConfig.apiKey) {
+                        throw new Error("Configuração do Firebase não foi encontrada ou é inválida.");
+                    }
+
                     const app = initializeApp(firebaseConfig);
                     db = getFirestore(app);
                     const auth = getAuth(app);
