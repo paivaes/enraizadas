@@ -94,6 +94,15 @@
                 </div>
             </div>
         </main>
+        
+        <!-- Display da Senha do Último Pedido -->
+        <div id="last-order-info" class="text-center my-8 p-4 bg-gray-800 rounded-lg hidden">
+            <p class="text-gray-400">Senha do seu último pedido:</p>
+            <p class="text-3xl font-bold text-indigo-400">
+                <span id="last-order-password"></span>
+            </p>
+        </div>
+
     </div>
     
     <!-- Modal para Nome do Cliente -->
@@ -124,20 +133,20 @@
             <h3 class="text-2xl font-bold mb-2">Pedido Enviado!</h3>
             
             <div class="my-6">
-                <p class="text-gray-400">Sua senha para retirada é:</p>
+                <p class="text-gray-400">Anote ou tire um print da sua senha:</p>
                 <p id="order-password" class="text-5xl font-bold text-indigo-400 tracking-wider">---</p>
             </div>
 
-            <p class="text-gray-400 mb-6">Para concluir, realize o pagamento via Pix, envie o comprovante para nosso WhatsApp 993584738 ou mostre-o na retirada do pedido. Seu pedido será preparado em seguida - AGUARDE SUA SENHA SER CHAMADA.</p>
+            <p class="text-gray-400 mb-6">Para concluir, realize o pagamento via Pix. Seu pedido será preparado em seguida.</p>
             
             <div class="bg-gray-900 rounded-lg p-4 mb-6 text-left">
                 <div class="space-y-1">
-                    <p class="text-sm text-gray-400">Nome: <span class="font-semibold text-white">Erislane Pereira</span></p>
-                    <p class="text-sm text-gray-400">Banco: <span class="font-semibold text-white">BANCO MERCADO PAGO</span></p>
+                    <p class="text-sm text-gray-400">Nome: <span class="font-semibold text-white">EDINHO SOARES PAIVA</span></p>
+                    <p class="text-sm text-gray-400">Banco: <span class="font-semibold text-white">BANCO NUBANK</span></p>
                 </div>
-                <p class="text-sm text-gray-400 mt-3">Chave Pix (CPF):</p>
+                <p class="text-sm text-gray-400 mt-3">Chave Pix (Celular):</p>
                 <div class="flex items-center gap-2 mt-1">
-                    <input id="pix-key-input" type="text" readonly value="61010913336" class="w-full bg-gray-700 border-gray-600 rounded-md py-2 px-3 text-white select-all focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    <input id="pix-key-input" type="text" readonly value="69993233757" class="w-full bg-gray-700 border-gray-600 rounded-md py-2 px-3 text-white select-all focus:outline-none focus:ring-2 focus:ring-indigo-500">
                     <button id="copy-pix-button" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-3 rounded-lg transition-all flex items-center gap-2 shrink-0">
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-copy"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
                         <span id="copy-pix-text">Copiar</span>
@@ -146,7 +155,7 @@
             </div>
 
             <button id="close-modal-button" class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-6 rounded-lg transition-colors">
-                Fechar
+                OK, anotei minha senha
             </button>
         </div>
     </div>
@@ -268,6 +277,8 @@
             const cancelEditBtn = document.getElementById('cancel-edit-btn');
             const orderPasswordElement = document.getElementById('order-password');
             const orderErrorMessage = document.getElementById('order-error-message');
+            const lastOrderInfo = document.getElementById('last-order-info');
+            const lastOrderPassword = document.getElementById('last-order-password');
 
             // --- FUNÇÕES ---
             const formatCurrency = (value) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -394,6 +405,7 @@
             };
 
             const addToCart = (itemId) => {
+                lastOrderInfo.classList.add('hidden');
                 const itemData = menuItems.find(item => item.id === itemId);
                 if (!itemData || (itemData.stock ?? 0) <= 0) return;
 
@@ -533,7 +545,6 @@
             const handleDeleteItem = async (itemId) => {
                 if (!db) return alert("Erro de conexão.");
                 if (confirm('Tem certeza que deseja apagar este item do cardápio?')) {
-                    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
                     try {
                         await deleteDoc(doc(db, `artifacts/${appId}/public/data/cardapio`, itemId));
                     } catch (error) {
@@ -601,8 +612,13 @@
             });
 
             closeModalButton.addEventListener('click', () => {
-                 closeModal(orderModal)
-                 customerNameForm.reset();
+                const currentPassword = orderPasswordElement.textContent;
+                if (currentPassword && currentPassword !== '---') {
+                    lastOrderPassword.textContent = currentPassword;
+                    lastOrderInfo.classList.remove('hidden');
+                }
+                closeModal(orderModal);
+                customerNameForm.reset();
             });
 
             adminButton.addEventListener('click', () => openModal(passwordModal));
@@ -637,7 +653,6 @@
             configForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
                 if (!db) return alert("Erro de conexão.");
-                const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
                 const newName = configNameInput.value.trim();
                 if (newName) {
@@ -662,7 +677,6 @@
             menuItemForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
                 if (!db) return alert("Erro de conexão.");
-                const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
                 const formData = {
                     name: document.getElementById('item-name').value,
@@ -733,7 +747,6 @@
 
             const listenToMenu = () => {
                 if (!db) return;
-                const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
                 const q = query(collection(db, `artifacts/${appId}/public/data/cardapio`));
                 onSnapshot(q, (snapshot) => {
                     const tempMenu = [];
@@ -750,7 +763,6 @@
 
             const listenToConfig = () => {
                 if (!db) return;
-                const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
                 const configRef = doc(db, `artifacts/${appId}/public/data/config`, 'lanchonete');
                 onSnapshot(configRef, (docSnap) => {
                     if (docSnap.exists()) {
