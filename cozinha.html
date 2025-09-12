@@ -63,6 +63,7 @@
                     </span>
                     <span id="connection-status" class="text-green-400">Conectado</span>
                 </div>
+                <button id="reset-password-button" class="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">Zerar Senhas</button>
                 <button id="report-button" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">Fechar Caixa</button>
             </div>
         </header>
@@ -112,9 +113,28 @@
         </div>
     </div>
 
+    <!-- Modal de Senha para Zerar Senhas -->
+    <div id="reset-password-modal" class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center hidden z-50 no-print">
+        <div class="bg-gray-800 rounded-2xl p-8 max-w-sm w-11/12 text-center shadow-2xl modal-enter">
+            <h3 class="text-2xl font-bold mb-4">Zerar Senhas dos Pedidos</h3>
+            <p class="text-gray-400 mb-6">Esta ação reiniciará a contagem de senhas para 1. Insira a senha para confirmar.</p>
+            <form id="reset-password-form">
+                <div>
+                    <label for="reset-admin-password" class="block text-sm font-medium text-gray-300 text-left mb-1">Senha de Administrador</label>
+                    <input type="password" id="reset-admin-password" required class="block w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+                <p id="reset-password-error-message" class="text-red-400 text-sm mt-2 h-4"></p>
+                <div class="mt-4 flex gap-2">
+                    <button type="button" id="cancel-reset-modal-button" class="w-full bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg transition-colors">Cancelar</button>
+                    <button type="submit" class="w-full bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">Zerar Agora</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getFirestore, collection, onSnapshot, query, doc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, collection, onSnapshot, query, doc, updateDoc, deleteDoc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 
         document.addEventListener('DOMContentLoaded', () => {
@@ -136,6 +156,11 @@
             const deletePasswordForm = document.getElementById('delete-password-form');
             const cancelDeleteModalButton = document.getElementById('cancel-delete-modal-button');
             const deletePasswordErrorMessage = document.getElementById('delete-password-error-message');
+            const resetPasswordButton = document.getElementById('reset-password-button');
+            const resetPasswordModal = document.getElementById('reset-password-modal');
+            const resetPasswordForm = document.getElementById('reset-password-form');
+            const cancelResetModalButton = document.getElementById('cancel-reset-modal-button');
+            const resetPasswordErrorMessage = document.getElementById('reset-password-error-message');
 
             const openModal = (modalElement) => {
                 modalElement.classList.remove('hidden');
@@ -343,6 +368,18 @@
                     orderIdToDelete = null; 
                 }
             };
+            
+            const resetPasswordCounter = async () => {
+                if (!db) return;
+                const counterRef = doc(db, `artifacts/${appId}/public/data/counters`, 'orderCounter');
+                try {
+                    await setDoc(counterRef, { currentNumber: 0 });
+                    alert('A numeração de senhas foi reiniciada! O próximo pedido terá a senha 1.');
+                } catch (error) {
+                    console.error("Erro ao zerar senhas: ", error);
+                    alert("Não foi possível zerar as senhas. Verifique as permissões.");
+                }
+            };
 
             (async () => {
                 try {
@@ -434,6 +471,7 @@
             reportButton.addEventListener('click', showDailyReport);
             closeReportModalButton.addEventListener('click', () => closeModal(reportModal));
             exportReportButton.addEventListener('click', exportAndPrintReport);
+            resetPasswordButton.addEventListener('click', () => openModal(resetPasswordModal));
 
             deletePasswordForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
@@ -457,6 +495,29 @@
                 deletePasswordForm.reset();
                 deletePasswordErrorMessage.textContent = '';
                 orderIdToDelete = null;
+            });
+
+            resetPasswordForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const passwordInput = document.getElementById('reset-admin-password');
+                const enteredPassword = passwordInput.value;
+                const correctPassword = 'admin';
+
+                if (enteredPassword === correctPassword) {
+                    await resetPasswordCounter();
+                    closeModal(resetPasswordModal);
+                    resetPasswordForm.reset();
+                    resetPasswordErrorMessage.textContent = '';
+                } else {
+                    resetPasswordErrorMessage.textContent = 'Senha incorreta.';
+                    passwordInput.value = '';
+                }
+            });
+
+            cancelResetModalButton.addEventListener('click', () => {
+                closeModal(resetPasswordModal);
+                resetPasswordForm.reset();
+                resetPasswordErrorMessage.textContent = '';
             });
         });
     </script>
