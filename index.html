@@ -146,17 +146,14 @@
                 </div>
                 <p class="text-sm text-gray-400 mt-3">Chave Pix (CPF):</p>
                 <div class="flex items-center gap-2 mt-1">
-                    <input id="pix-key-input" type="text" readonly value="61010913336" class="w-full bg-gray-700 border-gray-600 rounded-md py-2 px-3 text-white select-all focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    <input id="pix-key-input" type="text" readonly value="61010913336" class="w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white select-all focus:outline-none focus:ring-2 focus:ring-indigo-500">
                     <button id="copy-pix-button" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-3 rounded-lg transition-all flex items-center gap-2 shrink-0">
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-copy"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
                         <span id="copy-pix-text">Copiar</span>
                     </button>
                 </div>
             </div>
-
-            <button id="close-modal-button" class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-6 rounded-lg transition-colors">
-                OK, anotei minha senha
-            </button>
+            <p class="text-sm text-gray-500 mt-6">Para fazer um novo pedido, basta que ele atualize a página.</p>
         </div>
     </div>
 
@@ -258,7 +255,6 @@
             const totalPriceElement = document.getElementById('total-price');
             const checkoutButton = document.getElementById('checkout-button');
             const orderModal = document.getElementById('order-modal');
-            const closeModalButton = document.getElementById('close-modal-button');
             const customerNameModal = document.getElementById('customer-name-modal');
             const customerNameForm = document.getElementById('customer-name-form');
             const cancelNameModalButton = document.getElementById('cancel-name-modal-button');
@@ -277,8 +273,6 @@
             const cancelEditBtn = document.getElementById('cancel-edit-btn');
             const orderPasswordElement = document.getElementById('order-password');
             const orderErrorMessage = document.getElementById('order-error-message');
-            const lastOrderInfo = document.getElementById('last-order-info');
-            const lastOrderPassword = document.getElementById('last-order-password');
 
             // --- FUNÇÕES ---
             const formatCurrency = (value) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -405,7 +399,6 @@
             };
 
             const addToCart = (itemId) => {
-                lastOrderInfo.classList.add('hidden');
                 const itemData = menuItems.find(item => item.id === itemId);
                 if (!itemData || (itemData.stock ?? 0) <= 0) return;
 
@@ -611,10 +604,6 @@
                 orderErrorMessage.textContent = '';
             });
 
-            closeModalButton.addEventListener('click', () => {
-                closeModal(orderModal);
-            });
-
             adminButton.addEventListener('click', () => openModal(passwordModal));
             
             closeAdminModalButton.addEventListener('click', () => closeModal(adminModal));
@@ -709,6 +698,10 @@
                             appId: "1:93361321737:web:e4aac6bbf90354f58585d8"
                         });
                     const firebaseConfig = JSON.parse(firebaseConfigStr);
+
+                    if (!firebaseConfig.apiKey) {
+                        throw new Error("Configuração do Firebase não foi encontrada ou é inválida.");
+                    }
 
                     const app = initializeApp(firebaseConfig);
                     db = getFirestore(app);
