@@ -77,6 +77,10 @@
                         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-shopping-cart mr-2"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/></svg>
                         Seu Pedido
                     </h2>
+                     <div id="last-order-in-cart" class="text-center py-4 border-b border-gray-700 mb-4 hidden">
+                        <p class="text-sm text-gray-400">Senha do seu pedido:</p>
+                        <p id="last-order-password-in-cart" class="text-3xl font-bold text-indigo-400"></p>
+                    </div>
                     <div id="cart-items" class="space-y-4"></div>
                     <div id="empty-cart-message" class="text-center py-8 text-gray-400">
                         <p>Seu carrinho está vazio.</p>
@@ -94,16 +98,6 @@
                 </div>
             </div>
         </main>
-        
-        <!-- Display da Senha do Último Pedido -->
-        <div id="last-order-info" class="text-center my-8 p-6 bg-gray-800 rounded-lg hidden">
-            <p class="text-gray-400">Senha do seu último pedido:</p>
-            <p class="text-4xl font-bold text-indigo-400">
-                <span id="last-order-password"></span>
-            </p>
-             <button id="clear-last-order" class="mt-4 text-sm text-red-500 hover:text-red-400">Limpar e fazer novo pedido</button>
-        </div>
-
     </div>
     
     <!-- Modal para Nome do Cliente -->
@@ -155,7 +149,7 @@
                 </div>
             </div>
             <button id="close-modal-button" class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-6 rounded-lg transition-colors">
-                OK, anotei minha senha
+                Fechar
             </button>
         </div>
     </div>
@@ -280,6 +274,8 @@
             const lastOrderInfo = document.getElementById('last-order-info');
             const lastOrderPassword = document.getElementById('last-order-password');
             const clearLastOrderButton = document.getElementById('clear-last-order');
+            const lastOrderInCart = document.getElementById('last-order-in-cart');
+            const lastOrderPasswordInCart = document.getElementById('last-order-password-in-cart');
 
             // --- FUNÇÕES ---
             const formatCurrency = (value) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -326,10 +322,13 @@
             const renderCart = () => {
                 cartItemsContainer.innerHTML = '';
                 if (cart.length === 0) {
-                    emptyCartMessage.style.display = 'block';
+                    if (lastOrderInCart.classList.contains('hidden')) {
+                         emptyCartMessage.style.display = 'block';
+                    }
                     cartFooter.style.display = 'none';
                 } else {
                     emptyCartMessage.style.display = 'none';
+                    lastOrderInCart.classList.add('hidden');
                     cartFooter.style.display = 'block';
                     cart.forEach(cartItem => {
                         const cartItemElement = document.createElement('div');
@@ -406,6 +405,7 @@
             };
 
             const addToCart = (itemId) => {
+                lastOrderInCart.classList.add('hidden');
                 const itemData = menuItems.find(item => item.id === itemId);
                 if (!itemData || (itemData.stock ?? 0) <= 0) return;
 
@@ -614,6 +614,16 @@
                 orderErrorMessage.textContent = '';
             });
 
+            document.getElementById('close-modal-button').addEventListener('click', () => {
+                const currentPassword = orderPasswordElement.textContent;
+                if (currentPassword && currentPassword !== '---') {
+                    lastOrderPasswordInCart.textContent = currentPassword;
+                    lastOrderInCart.classList.remove('hidden');
+                    emptyCartMessage.style.display = 'none';
+                }
+                closeModal(orderModal);
+            });
+
             adminButton.addEventListener('click', () => openModal(passwordModal));
             
             closeAdminModalButton.addEventListener('click', () => closeModal(adminModal));
@@ -697,22 +707,16 @@
                     const orderData = JSON.parse(storedOrder);
                     const timeSinceOrder = Date.now() - orderData.timestamp;
                     
-                    // Considera "recente" se for nos últimos 30 minutos (1800000 ms)
                     if (timeSinceOrder < 1800000) { 
-                        lastOrderPassword.textContent = orderData.password;
-                        lastOrderInfo.classList.remove('hidden');
+                        lastOrderPasswordInCart.textContent = orderData.password;
+                        lastOrderInCart.classList.remove('hidden');
+                        emptyCartMessage.style.display = 'none';
                     } else {
                         localStorage.removeItem('lastOrder');
                     }
                 }
             };
             
-            clearLastOrderButton.addEventListener('click', () => {
-                localStorage.removeItem('lastOrder');
-                lastOrderInfo.classList.add('hidden');
-            });
-
-
             // --- INICIALIZAÇÃO DA APLICAÇÃO (UI) ---
             rerenderAll();
 
