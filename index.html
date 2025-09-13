@@ -96,11 +96,12 @@
         </main>
         
         <!-- Display da Senha do Último Pedido -->
-        <div id="last-order-info" class="text-center my-8 p-4 bg-gray-800 rounded-lg hidden">
+        <div id="last-order-info" class="text-center my-8 p-6 bg-gray-800 rounded-lg hidden">
             <p class="text-gray-400">Senha do seu último pedido:</p>
-            <p class="text-3xl font-bold text-indigo-400">
+            <p class="text-4xl font-bold text-indigo-400">
                 <span id="last-order-password"></span>
             </p>
+             <button id="clear-last-order" class="mt-4 text-sm text-red-500 hover:text-red-400">Limpar e fazer novo pedido</button>
         </div>
 
     </div>
@@ -153,7 +154,9 @@
                     </button>
                 </div>
             </div>
-            <p class="text-sm text-gray-500 mt-6">Para fazer um novo pedido, basta atualizar a página.</p>
+            <button id="close-modal-button" class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-6 rounded-lg transition-colors">
+                OK, anotei minha senha
+            </button>
         </div>
     </div>
 
@@ -255,6 +258,7 @@
             const totalPriceElement = document.getElementById('total-price');
             const checkoutButton = document.getElementById('checkout-button');
             const orderModal = document.getElementById('order-modal');
+            const closeModalButton = document.getElementById('close-modal-button');
             const customerNameModal = document.getElementById('customer-name-modal');
             const customerNameForm = document.getElementById('customer-name-form');
             const cancelNameModalButton = document.getElementById('cancel-name-modal-button');
@@ -273,6 +277,9 @@
             const cancelEditBtn = document.getElementById('cancel-edit-btn');
             const orderPasswordElement = document.getElementById('order-password');
             const orderErrorMessage = document.getElementById('order-error-message');
+            const lastOrderInfo = document.getElementById('last-order-info');
+            const lastOrderPassword = document.getElementById('last-order-password');
+            const clearLastOrderButton = document.getElementById('clear-last-order');
 
             // --- FUNÇÕES ---
             const formatCurrency = (value) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -506,6 +513,9 @@
                         transaction.set(orderRef, order);
                     });
 
+                    const orderData = { password: finalPassword, timestamp: Date.now() };
+                    localStorage.setItem('lastOrder', JSON.stringify(orderData));
+
                     orderPasswordElement.textContent = finalPassword;
                     closeModal(customerNameModal);
                     openModal(orderModal);
@@ -680,6 +690,28 @@
                     alert("Falha ao salvar o item. Verifique as permissões no Firebase.");
                 }
             });
+            
+            const checkForRecentOrder = () => {
+                const storedOrder = localStorage.getItem('lastOrder');
+                if (storedOrder) {
+                    const orderData = JSON.parse(storedOrder);
+                    const timeSinceOrder = Date.now() - orderData.timestamp;
+                    
+                    // Considera "recente" se for nos últimos 30 minutos (1800000 ms)
+                    if (timeSinceOrder < 1800000) { 
+                        lastOrderPassword.textContent = orderData.password;
+                        lastOrderInfo.classList.remove('hidden');
+                    } else {
+                        localStorage.removeItem('lastOrder');
+                    }
+                }
+            };
+            
+            clearLastOrderButton.addEventListener('click', () => {
+                localStorage.removeItem('lastOrder');
+                lastOrderInfo.classList.add('hidden');
+            });
+
 
             // --- INICIALIZAÇÃO DA APLICAÇÃO (UI) ---
             rerenderAll();
@@ -716,6 +748,7 @@
                     console.log("Firebase inicializado e autenticado com sucesso.");
                     listenToMenu(); 
                     listenToConfig();
+                    checkForRecentOrder();
 
                 } catch (error) {
                     console.error("Erro ao inicializar o Firebase.", error);
