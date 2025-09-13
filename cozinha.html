@@ -76,13 +76,20 @@
             <button id="report-button" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors w-full sm:w-auto">Gerar Relatório</button>
         </div>
 
-
+        <h2 class="text-2xl font-semibold mb-4 text-indigo-300 border-b border-gray-700 pb-2">Pedidos Pendentes</h2>
         <div id="orders-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            <!-- Pedidos serão inseridos aqui -->
+            <!-- Pedidos pendentes serão inseridos aqui -->
         </div>
         <div id="loading-orders" class="text-center py-10">
             <p class="text-gray-400 text-lg">Carregando pedidos...</p>
         </div>
+
+        <h2 class="text-2xl font-semibold mt-12 mb-4 text-green-300 border-b border-gray-700 pb-2">Pedidos Concluídos</h2>
+        <div id="completed-orders-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            <!-- Pedidos concluídos serão inseridos aqui -->
+        </div>
+
+
     </div>
     
     <div id="print-area" class="hidden bg-white text-black p-4 text-xs print-area"></div>
@@ -152,6 +159,7 @@
             let orderIdToDelete = null;
             const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
             const ordersContainer = document.getElementById('orders-container');
+            const completedOrdersContainer = document.getElementById('completed-orders-container');
             const loadingOrders = document.getElementById('loading-orders');
             const printArea = document.getElementById('print-area');
             const connectionStatus = document.getElementById('connection-status');
@@ -174,10 +182,9 @@
             const cancelResetModalButton = document.getElementById('cancel-reset-modal-button');
             const resetPasswordErrorMessage = document.getElementById('reset-password-error-message');
             
-            // Set default date to today using local timezone
             const today = new Date();
             const year = today.getFullYear();
-            const month = String(today.getMonth() + 1).padStart(2, '0'); // Months are 0-indexed
+            const month = String(today.getMonth() + 1).padStart(2, '0');
             const day = String(today.getDate()).padStart(2, '0');
             reportDateInput.value = `${year}-${month}-${day}`;
 
@@ -207,13 +214,11 @@
 
             const formatCurrency = (value) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-            const renderOrders = (orders) => {
-                allOrdersCache = orders;
-                loadingOrders.style.display = 'none';
-                ordersContainer.innerHTML = '';
+            const renderOrdersList = (orders, container, emptyMessage) => {
+                container.innerHTML = '';
 
                 if (orders.length === 0) {
-                    ordersContainer.innerHTML = `<p class="text-gray-400 col-span-full text-center">Nenhum pedido pendente.</p>`;
+                    container.innerHTML = `<p class="text-gray-400 col-span-full text-center">${emptyMessage}</p>`;
                     return;
                 }
 
@@ -249,7 +254,7 @@
                             <button data-id="${pedido.id}" class="delete-btn col-span-1 bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-2 rounded-lg transition-colors">Excluir</button>
                         </div>
                     `;
-                    ordersContainer.appendChild(orderCard);
+                    container.appendChild(orderCard);
                 });
             };
 
@@ -303,7 +308,6 @@
                     return;
                 }
                 
-                // Trata o fuso horário para pegar o dia local correto
                 const reportDate = new Date(dateString + 'T00:00:00');
 
                 const startDate = new Date(reportDate);
@@ -457,14 +461,14 @@
                             allOrders.push({ id: doc.id, ...doc.data() });
                         });
                         
-                        allOrders.sort((a, b) => {
-                            const statusA = a.status === 'pendente' ? 0 : 1;
-                            const statusB = b.status === 'pendente' ? 0 : 1;
-                            if (statusA !== statusB) return statusA - statusB;
-                            return (b.createdAt?.seconds ?? 0) - (a.createdAt?.seconds ?? 0);
-                        });
+                        allOrdersCache = allOrders;
 
-                        renderOrders(allOrders);
+                        const pendingOrders = allOrders.filter(o => o.status !== 'concluido').sort((a,b) => (a.createdAt?.seconds ?? 0) - (b.createdAt?.seconds ?? 0));
+                        const completedOrders = allOrders.filter(o => o.status === 'concluido').sort((a,b) => (b.createdAt?.seconds ?? 0) - (a.createdAt?.seconds ?? 0));
+
+                        loadingOrders.style.display = 'none';
+                        renderOrdersList(pendingOrders, ordersContainer, "Nenhum pedido pendente.");
+                        renderOrdersList(completedOrders, completedOrdersContainer, "Nenhum pedido concluído.");
 
                     }, (error) => {
                         console.error("Erro ao buscar pedidos: ", error);
@@ -502,8 +506,12 @@
             
             reportButton.addEventListener('click', () => showDailyReport(reportDateInput.value));
             todayReportButton.addEventListener('click', () => {
-                const today = new Date().toISOString().split('T')[0];
-                showDailyReport(today);
+                const today = new Date();
+                const year = today.getFullYear();
+                const month = String(today.getMonth() + 1).padStart(2, '0');
+                const day = String(today.getDate()).padStart(2, '0');
+                const todayString = `${year}-${month}-${day}`;
+                showDailyReport(todayString);
             });
             closeReportModalButton.addEventListener('click', () => closeModal(reportModal));
             exportReportButton.addEventListener('click', exportAndPrintReport);
