@@ -174,8 +174,12 @@
             const cancelResetModalButton = document.getElementById('cancel-reset-modal-button');
             const resetPasswordErrorMessage = document.getElementById('reset-password-error-message');
             
-            // Set default date to today
-            reportDateInput.valueAsDate = new Date();
+            // Set default date to today using local timezone
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = String(today.getMonth() + 1).padStart(2, '0'); // Months are 0-indexed
+            const day = String(today.getDate()).padStart(2, '0');
+            reportDateInput.value = `${year}-${month}-${day}`;
 
 
             const openModal = (modalElement) => {
@@ -299,6 +303,7 @@
                     return;
                 }
                 
+                // Trata o fuso horário para pegar o dia local correto
                 const reportDate = new Date(dateString + 'T00:00:00');
 
                 const startDate = new Date(reportDate);
