@@ -132,7 +132,7 @@
                 <p id="order-password" class="text-5xl font-bold text-indigo-400 tracking-wider">---</p>
             </div>
 
-            <p class="text-gray-400 mb-6">Para concluir, realize o pagamento via Pix, envie o comprovante para nosso WhatsApp 993584738 ou mostre-o na retirada do pedido. Seu pedido será preparado em seguida - AGUARDE SUA SENHA SER CHAMADA.</p>
+            <p class="text-gray-400 mb-6">Para concluir, realize o pagamento via Pix e mostre-o no balcão para retirada do pedido.</p>
             
             <div class="bg-gray-900 rounded-lg p-4 mb-6 text-left">
                 <div class="space-y-1">
@@ -271,9 +271,6 @@
             const cancelEditBtn = document.getElementById('cancel-edit-btn');
             const orderPasswordElement = document.getElementById('order-password');
             const orderErrorMessage = document.getElementById('order-error-message');
-            const lastOrderInfo = document.getElementById('last-order-info');
-            const lastOrderPassword = document.getElementById('last-order-password');
-            const clearLastOrderButton = document.getElementById('clear-last-order');
             const lastOrderInCart = document.getElementById('last-order-in-cart');
             const lastOrderPasswordInCart = document.getElementById('last-order-password-in-cart');
 
@@ -405,6 +402,7 @@
             };
 
             const addToCart = (itemId) => {
+                localStorage.removeItem('lastOrder');
                 lastOrderInCart.classList.add('hidden');
                 const itemData = menuItems.find(item => item.id === itemId);
                 if (!itemData || (itemData.stock ?? 0) <= 0) return;
